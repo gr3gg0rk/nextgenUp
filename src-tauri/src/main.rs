@@ -65,14 +65,19 @@ fn spawn_update_check(handle: tauri::AppHandle) {
             ))
             .blocking_show();
 
-        if install && update.download_and_install(|_, _| {}, || {}).await.is_ok() {
-            // Stop the sidecar before the app restarts into the new version
+        if install {
+            // Stop the sidecar BEFORE installing: Windows cannot overwrite a
+            // running exe, and on Windows download_and_install exits the
+            // process as soon as the installer starts, so cleanup placed
+            // after it would never run.
             if let Some(state) = handle.try_state::<ServerChild>() {
                 if let Some(mut child) = state.0.lock().unwrap().take() {
                     kill_server_tree(&mut child);
                 }
             }
-            handle.restart();
+            if update.download_and_install(|_, _| {}, || {}).await.is_ok() {
+                handle.restart();
+            }
         }
     });
 }
