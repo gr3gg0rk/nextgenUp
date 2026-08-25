@@ -1,0 +1,9 @@
+{
+  "identifier": "remote-localhost",
+  "description": "Let the local server UI open native save dialogs",
+  "remote": {
+    "urls": ["http://127.0.0.1:18790"]
+  },
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default"]
+}

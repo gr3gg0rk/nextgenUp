@@ -349,12 +349,42 @@
                 }
             };
             evtSource.onerror = () => {
+                // The event stream can drop during long encodes while FFmpeg
+                // keeps working — switch to polling instead of failing.
                 evtSource.close();
-                onUpscaleError('Connection lost');
+                pollVideoProgress(startTime);
             };
         } catch (err) {
             onUpscaleError(err.message);
         }
+    }
+
+    async function fetchProgressOnce(taskId) {
+        const res = await fetch(`/api/progress/${taskId}`);
+        const reader = res.body.getReader();
+        const { value } = await reader.read();
+        reader.cancel();
+        const text = new TextDecoder().decode(value);
+        const match = text.match(/data: (.+)/);
+        return match ? JSON.parse(match[1]) : null;
+    }
+
+    function pollVideoProgress(startTime) {
+        let failures = 0;
+        const iv = setInterval(async () => {
+            try {
+                const data = await fetchProgressOnce(state.taskId);
+                if (!data) return;
+                failures = 0;
+                updateProgress(data, startTime);
+                if (data.status === 'completed') { clearInterval(iv); onUpscaleComplete(); }
+                else if (data.status === 'cancelled') { clearInterval(iv); onUpscaleCancelled(); }
+                else if (data.status === 'error') { clearInterval(iv); onUpscaleError(data.message); }
+            } catch {
+                failures++;
+                if (failures > 15) { clearInterval(iv); onUpscaleError('Connection lost'); }
+            }
+        }, 1000);
     }
 
     // --- Pro Mode (browser WebGPU) ---
@@ -533,9 +563,44 @@
         showToast('Error: ' + msg);
     }
 
+    // In the desktop app the webview has no download manager, so downloads
+    // go through a native Save dialog + the local server. In browsers we
+    // fall back to a normal download.
+    function desktopDialog() {
+        return (window.__TAURI__ && window.__TAURI__.dialog) ? window.__TAURI__.dialog : null;
+    }
+
+    async function saveServerResult(url, taskId, suggestedName) {
+        const dlg = desktopDialog();
+        if (dlg) {
+            try {
+                const path = await dlg.save({ defaultPath: suggestedName });
+                if (!path) return;
+                const res = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task_id: taskId, path }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'save failed');
+                showToast('Saved to ' + data.path);
+            } catch (e) {
+                showToast('Save failed: ' + e.message);
+            }
+            return;
+        }
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = suggestedName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
     function downloadResult() {
         if (!state.taskId) return;
-        window.open(`/api/download/${state.taskId}`, '_blank');
+        const stem = state.file ? state.file.name.replace(/\.[^.]+$/, '') : 'video';
+        saveServerResult(`/api/download/${state.taskId}`, state.taskId, `${stem}_4K.mp4`);
     }
 
     function resetApp() {

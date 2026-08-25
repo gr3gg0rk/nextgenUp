@@ -222,6 +222,86 @@ def open_external():
     return jsonify({'status': 'ok'})
 
 
+def _local_only():
+    return request.remote_addr in ('127.0.0.1', '::1')
+
+
+def _find_output(task_id):
+    """Locate a finished task's output file, surviving server restarts."""
+    task = tasks.get(task_id)
+    if task and task.get('output') and os.path.exists(task['output']):
+        return task['output']
+    if _safe_task_id(task_id):
+        for suffix in ('_basic_4k.mp4', '_pro_4k.mp4', '_upscaled.png'):
+            p = os.path.join(app.config['OUTPUT_FOLDER'], task_id + suffix)
+            if os.path.exists(p):
+                return p
+    return None
+
+
+@app.route('/api/save', methods=['POST'])
+def save_to_path():
+    """Copy a finished result to a user-chosen absolute path. Used by the
+    desktop app after its native Save dialog (the webview has no download
+    manager). Local requests only."""
+    if not _local_only():
+        return jsonify({'error': 'Local requests only'}), 403
+    data = request.json or {}
+    task_id = data.get('task_id', '')
+    dest = data.get('path', '')
+    src = _find_output(task_id)
+    if not src:
+        return jsonify({'error': 'Result not found'}), 404
+    if not os.path.isabs(dest) or not os.path.isdir(os.path.dirname(dest)):
+        return jsonify({'error': 'Invalid destination path'}), 400
+    try:
+        shutil.copyfile(src, dest)
+        return jsonify({'status': 'ok', 'path': dest})
+    except OSError as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/save-blob', methods=['POST'])
+def save_blob():
+    """Write posted bytes (browser-side results: Quick/Enhance images,
+    batch zips) to a user-chosen absolute path. Local requests only."""
+    if not _local_only():
+        return jsonify({'error': 'Local requests only'}), 403
+    dest = request.args.get('path', '')
+    if not os.path.isabs(dest) or not os.path.isdir(os.path.dirname(dest)):
+        return jsonify({'error': 'Invalid destination path'}), 400
+    if not request.data:
+        return jsonify({'error': 'No data'}), 400
+    try:
+        with open(dest, 'wb') as f:
+            f.write(request.data)
+        return jsonify({'status': 'ok', 'path': dest})
+    except OSError as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/diag')
+def diagnostics():
+    """Environment report for bug triage."""
+    import platform as _pf
+    enc = _detect_encoder()
+    try:
+        ffv = subprocess.run([FFMPEG, '-version'], capture_output=True,
+                             text=True, timeout=8).stdout.splitlines()[0]
+    except Exception as e:
+        ffv = f'unavailable: {e}'
+    return jsonify({
+        'version': VERSION,
+        'platform': f'{_pf.system()} {_pf.release()} {_pf.machine()}',
+        'python': sys.version.split()[0],
+        'ffmpeg': ffv,
+        'encoder': enc,
+        'server_ai': SERVER_AI,
+        'face_restore': FACE_RESTORE,
+        'frozen': paths.FROZEN,
+    })
+
+
 @app.route('/api/update-check')
 def update_check():
     """Compare the running version against the newest GitHub release."""
@@ -548,12 +628,16 @@ def image_download(task_id):
 # --- Helpers ---
 
 def _detect_encoder():
-    """Find the best available H.264 encoder."""
+    """Find the best available H.264 encoder. On macOS prefer the
+    VideoToolbox hardware encoder: it is roughly 10x faster than libx264
+    for 4K output, which matters for long videos."""
     try:
         result = subprocess.run(
             [FFMPEG, '-encoders'], capture_output=True, text=True, timeout=10
         )
         encoders = result.stdout
+        if sys.platform == 'darwin' and 'h264_videotoolbox' in encoders:
+            return 'h264_videotoolbox'
         if 'libx264' in encoders:
             return 'libx264'
         if 'h264_videotoolbox' in encoders:

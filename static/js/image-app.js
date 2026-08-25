@@ -444,17 +444,72 @@
         showToast('Error: ' + msg);
     }
 
+    // Desktop app: native Save dialog + local server (the webview has no
+    // download manager). Browsers: normal download.
+    function desktopDialog() {
+        return (window.__TAURI__ && window.__TAURI__.dialog) ? window.__TAURI__.dialog : null;
+    }
+
+    async function saveBlobResult(blob, suggestedName) {
+        const dlg = desktopDialog();
+        if (dlg) {
+            try {
+                const path = await dlg.save({ defaultPath: suggestedName });
+                if (!path) return;
+                const res = await fetch('/api/save-blob?path=' + encodeURIComponent(path), {
+                    method: 'POST',
+                    body: blob,
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'save failed');
+                showToast('Saved to ' + data.path);
+            } catch (e) {
+                showToast('Save failed: ' + e.message);
+            }
+            return;
+        }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = suggestedName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    }
+
+    async function saveServerImage(taskId, suggestedName) {
+        const dlg = desktopDialog();
+        if (dlg) {
+            try {
+                const path = await dlg.save({ defaultPath: suggestedName });
+                if (!path) return;
+                const res = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task_id: taskId, path }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'save failed');
+                showToast('Saved to ' + data.path);
+            } catch (e) {
+                showToast('Save failed: ' + e.message);
+            }
+            return;
+        }
+        const a = document.createElement('a');
+        a.href = `/api/image/download/${taskId}`;
+        a.download = suggestedName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
     function downloadImageResult() {
+        const stem = imgState.file ? imgState.file.name.replace(/\.[^.]+$/, '') : 'image';
         if (imgState.resultBlob) {
-            const a = document.createElement('a');
-            a.href = imgState.resultUrl;
-            const stem = imgState.file ? imgState.file.name.replace(/\.[^.]+$/, '') : 'image';
-            a.download = `${stem}_upscaled.png`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            saveBlobResult(imgState.resultBlob, `${stem}_upscaled.png`);
         } else if (imgState.taskId) {
-            window.open(`/api/image/download/${imgState.taskId}`, '_blank');
+            saveServerImage(imgState.taskId, `${stem}_upscaled.png`);
         }
     }
 
@@ -729,11 +784,15 @@
     function addItemDownloadLink(item) {
         const a = document.createElement('a');
         a.textContent = 'save';
-        a.href = URL.createObjectURL(item.blob);
-        a.download = item.file.name.replace(/\.[^.]+$/, '') + '_upscaled.png';
+        a.href = '#';
+        const name = item.file.name.replace(/\.[^.]+$/, '') + '_upscaled.png';
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            saveBlobResult(item.blob, name);
+        });
         item.el.info.appendChild(a);
         // Show the result as the thumbnail
-        item.el.img.src = a.href;
+        item.el.img.src = URL.createObjectURL(item.blob);
     }
 
     async function downloadBatchZip() {
@@ -751,13 +810,7 @@
         batchZipBtn.textContent = 'Zipping...';
         try {
             const blob = await zip.generateAsync({ type: 'blob' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'upscaled_images.zip';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+            await saveBlobResult(blob, 'upscaled_images.zip');
         } finally {
             batchZipBtn.disabled = false;
             batchZipBtn.textContent = 'Download All (.zip)';
