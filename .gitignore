@@ -44,3 +44,6 @@ dist/
 build/
 *.spec.bak
 package-lock.json
+
+# Internal marketing material — never commit
+launch-kit/
