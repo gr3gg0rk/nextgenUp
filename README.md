@@ -45,6 +45,18 @@ Every installer is fully self-contained — the AI engine, FFmpeg, and the upsca
 
 macOS note: builds are not notarized with Apple; on first launch, right-click the app and choose Open.
 
+## Demo video
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=tyuIr6J_iZk">
+    <img src="https://img.youtube.com/vi/tyuIr6J_iZk/maxresdefault.jpg" alt="NextGenUp demo: free AI video upscaler, 720p to 4K" width="720">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=tyuIr6J_iZk">Watch the 30-second demo</a> — a full tutorial is coming soon on <a href="https://www.youtube.com/@matilylabs">our YouTube channel</a>, subscribe to catch it.
+</p>
+
 ## Screenshots
 
 <p align="center">
