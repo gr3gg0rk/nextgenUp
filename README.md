@@ -67,22 +67,31 @@ macOS note: builds are not notarized with Apple; on first launch, right-click th
 </p>
 
 <p align="center">
-  <img src="assets/screens/modes.png" alt="Image upscaling modes: Quick, Quality, Enhance, and Ultra with face restoration" width="425">
-  <img src="assets/screens/video.png" alt="Video upscaling to 4K with live progress and cancel" width="425">
+  <img src="assets/screens/modes.png" alt="Image upscaling modes: Quick, Quality, Enhance, and Ultra with face restoration" width="860">
 </p>
 
 <p align="center">
-  <img src="assets/screens/bg-remove.png" alt="AI background remover: portrait cut out to a transparent PNG with one click" width="425">
-  <img src="assets/screens/eraser.png" alt="Magic Eraser: brush over an unwanted object and AI removes it" width="425">
+  <img src="assets/screens/bg-remove.png" alt="AI background remover: portrait cut out to a transparent PNG with one click" width="860">
 </p>
 
 <p align="center">
-  <img src="assets/screens/restore.png" alt="Old Photo Restore: black and white photo colorized with AI" width="425">
-  <img src="assets/screens/denoise.png" alt="Denoise and deblur: grainy night photo cleaned with AI" width="425">
+  <img src="assets/screens/eraser.png" alt="Magic Eraser: brush over an unwanted object and AI removes it" width="860">
 </p>
 
 <p align="center">
-  <img src="assets/screens/batch.png" alt="Batch processing multiple images with per-item progress" width="640">
+  <img src="assets/screens/restore.png" alt="Old Photo Restore: black and white photo colorized with AI" width="860">
+</p>
+
+<p align="center">
+  <img src="assets/screens/denoise.png" alt="Denoise and deblur: grainy night photo cleaned with AI" width="860">
+</p>
+
+<p align="center">
+  <img src="assets/screens/video.png" alt="Video upscaling to 4K with live progress and cancel" width="860">
+</p>
+
+<p align="center">
+  <img src="assets/screens/batch.png" alt="Batch processing multiple images with per-item progress" width="860">
 </p>
 
 ## Features
