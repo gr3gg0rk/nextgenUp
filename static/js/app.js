@@ -169,11 +169,10 @@
         dropzone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropzone.classList.remove('drag-over');
-            const files = e.dataTransfer.files;
-            if (files.length) handleFile(files[0]);
+            if (e.dataTransfer.files.length) handleVideoFiles(e.dataTransfer.files);
         });
         fileInput.addEventListener('change', () => {
-            if (fileInput.files.length) handleFile(fileInput.files[0]);
+            if (fileInput.files.length) handleVideoFiles(fileInput.files);
         });
 
         // Mode selection
@@ -209,18 +208,37 @@
 
         // New video
         newVideoBtn.addEventListener('click', resetApp);
+
+        // Video batch
+        $('#vbatch-start-btn').addEventListener('click', startVideoBatch);
+        $('#vbatch-zip-btn').addEventListener('click', downloadVideoBatchZip);
+        $('#vbatch-reset-btn').addEventListener('click', resetVideoBatch);
+        document.querySelectorAll('[data-vbatchscale]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                if (vbatch.running) return;
+                document.querySelectorAll('[data-vbatchscale]').forEach((b) => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                vbatch.scale = parseInt(btn.dataset.vbatchscale);
+            });
+        });
+    }
+
+    function isValidVideo(file) {
+        return (file.type.startsWith('video/') || file.name.match(/\.(mp4|mov|webm|mkv|avi)$/i))
+            && file.size <= 2 * 1024 * 1024 * 1024;
+    }
+
+    function handleVideoFiles(fileList) {
+        const files = Array.from(fileList).filter(isValidVideo);
+        if (!files.length) {
+            showToast('Please select video files under 2GB.');
+            return;
+        }
+        if (files.length === 1) handleFile(files[0]);
+        else enterVideoBatch(files);
     }
 
     async function handleFile(file) {
-        if (!file.type.startsWith('video/') && !file.name.match(/\.(mp4|mov|webm|mkv|avi)$/i)) {
-            showToast('Please select a video file.');
-            return;
-        }
-        if (file.size > 2 * 1024 * 1024 * 1024) {
-            showToast('File too large. Maximum 2GB.');
-            return;
-        }
-
         state.file = file;
 
         // Show preview immediately
@@ -388,59 +406,54 @@
     }
 
     // --- Pro Mode (browser WebGPU) ---
-    async function runProUpscale(startTime) {
-        if (typeof ProUpscaler === 'undefined') {
-            onUpscaleError('Pro upscaler module not loaded.');
-            return;
-        }
+
+    /**
+     * Run one video through the browser AI pipeline: extract frames,
+     * upscale each, post them to the server, assemble, wait for completion.
+     * Shared by single Pro mode and the batch queue.
+     * onProgress(pct, message, currentFrame, totalFrames)
+     */
+    async function proProcessVideo(file, taskId, info, upscaler, onProgress, isCancelled) {
+        await fetch('/api/pro/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_id: taskId }),
+        });
+
+        const video = document.createElement('video');
+        video.muted = true;
+        video.playsInline = true;
+        video.src = URL.createObjectURL(file);
+        await new Promise((resolve) => { video.onloadedmetadata = resolve; video.load(); });
+
+        const fps = info.fps;
+        const totalFrames = Math.floor(video.duration * fps);
+        const canvas = $('#frame-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        let processed = 0;
+
+        // Show tile progress within each frame
+        upscaler.onTileProgress = (done, total) => {
+            const overallPct = Math.min(95, Math.round(((processed + done / total) / totalFrames) * 95));
+            onProgress(overallPct,
+                `AI upscaling frame ${processed + 1}/${totalFrames} (tile ${done}/${total})`,
+                processed, totalFrames);
+        };
 
         try {
-            updateProgress({ progress: 0, message: 'Loading AI model...', current_frame: 0, total_frames: state.videoInfo.duration * state.videoInfo.fps }, startTime);
+            // Seek to each frame individually. Slower than
+            // requestVideoFrameCallback streaming, but frame-exact: rVFC
+            // silently drops frames when the tab is occluded or throttled,
+            // which corrupts the output. Extraction isn't the bottleneck —
+            // AI inference is — so correctness wins.
+            for (let i = 0; i < totalFrames; i++) {
+                if (isCancelled()) throw new Error('cancelled');
+                video.currentTime = i / fps;
+                await new Promise((resolve) => { video.onseeked = resolve; });
 
-            // Initialize Pro upscaler
-            const upscaler = new ProUpscaler();
-            state.activeUpscaler = upscaler;
-            await upscaler.init('/static/models/realesr-general-x4v3.onnx');
-            const backend = upscaler.getBackend();
-            updateProgress({ progress: 2, message: `Model loaded (${backend.toUpperCase()})`, current_frame: 0, total_frames: state.videoInfo.duration * state.videoInfo.fps }, startTime);
-
-            // Tell server to prepare for frames
-            await fetch('/api/pro/start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ task_id: state.taskId }),
-            });
-
-            const video = document.createElement('video');
-            video.muted = true;
-            video.playsInline = true;
-            video.src = URL.createObjectURL(state.file);
-            await new Promise((resolve) => { video.onloadedmetadata = resolve; video.load(); });
-
-            const fps = state.videoInfo.fps;
-            const duration = video.duration;
-            const totalFrames = Math.floor(duration * fps);
-            const canvas = $('#frame-canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-
-            let processed = 0;
-
-            // Show tile progress within each frame
-            upscaler.onTileProgress = (done, total) => {
-                const framePct = done / total;
-                const overallPct = Math.min(95, Math.round(((processed + framePct) / totalFrames) * 95));
-                updateProgress({
-                    progress: overallPct,
-                    message: `AI upscaling frame ${processed + 1}/${totalFrames} (tile ${done}/${total}) [${backend.toUpperCase()}]`,
-                    current_frame: processed,
-                    total_frames: totalFrames,
-                }, startTime);
-            };
-
-            // Upscale the current video frame and send it to the server.
-            const handleOneFrame = async () => {
                 ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
                 const imageData = ctx.getImageData(0, 0, video.videoWidth, video.videoHeight);
 
@@ -450,70 +463,75 @@
                 const outCanvas = $('#output-canvas');
                 outCanvas.width = upscaled.width;
                 outCanvas.height = upscaled.height;
-                const outCtx = outCanvas.getContext('2d');
-                outCtx.putImageData(upscaled, 0, 0);
+                outCanvas.getContext('2d').putImageData(upscaled, 0, 0);
 
                 const blob = await new Promise((resolve) => outCanvas.toBlob(resolve, 'image/jpeg', 0.95));
 
-                await fetch(`/api/pro/frame/${state.taskId}/${processed}`, {
+                await fetch(`/api/pro/frame/${taskId}/${processed}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'image/jpeg' },
                     body: blob,
                 });
 
                 processed++;
-                updateProgress({
-                    progress: Math.min(95, Math.round((processed / totalFrames) * 95)),
-                    message: `AI upscaling frame ${processed}/${totalFrames} [${backend.toUpperCase()}]`,
-                    current_frame: processed,
-                    total_frames: totalFrames,
-                }, startTime);
-            };
-
-            // Seek to each frame individually. Slower than
-            // requestVideoFrameCallback streaming, but frame-exact: rVFC
-            // silently drops frames when the tab is occluded or throttled,
-            // which corrupts the output. Extraction isn't the bottleneck —
-            // AI inference is — so correctness wins.
-            for (let i = 0; i < totalFrames; i++) {
-                if (state.cancelRequested) throw new Error('cancelled');
-                video.currentTime = i / fps;
-                await new Promise((resolve) => { video.onseeked = resolve; });
-                await handleOneFrame();
+                onProgress(Math.min(95, Math.round((processed / totalFrames) * 95)),
+                    `AI upscaling frame ${processed}/${totalFrames}`,
+                    processed, totalFrames);
             }
-
-            // Assemble final video
-            updateProgress({ progress: 96, message: 'Assembling video with audio...', current_frame: totalFrames, total_frames: totalFrames }, startTime);
-
-            await fetch('/api/pro/assemble', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ task_id: state.taskId, fps }),
-            });
-
-            // Poll for completion
-            const pollInterval = setInterval(async () => {
-                const res = await fetch(`/api/progress/${state.taskId}`);
-                const reader = res.body.getReader();
-                const { value } = await reader.read();
-                reader.cancel();
-                const text = new TextDecoder().decode(value);
-                const match = text.match(/data: (.+)/);
-                if (match) {
-                    const data = JSON.parse(match[1]);
-                    if (data.status === 'completed') {
-                        clearInterval(pollInterval);
-                        onUpscaleComplete();
-                    } else if (data.status === 'error') {
-                        clearInterval(pollInterval);
-                        onUpscaleError(data.message);
-                    }
-                }
-            }, 1000);
-
+        } finally {
             URL.revokeObjectURL(video.src);
+        }
+
+        // Assemble final video, then wait for the server to finish
+        onProgress(96, 'Assembling video with audio...', totalFrames, totalFrames);
+        await fetch('/api/pro/assemble', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_id: taskId, fps }),
+        });
+
+        while (true) {
+            if (isCancelled()) throw new Error('cancelled');
+            await new Promise((r) => setTimeout(r, 1000));
+            let data;
+            try {
+                data = await fetchProgressOnce(taskId);
+            } catch {
+                continue;
+            }
+            if (!data) continue;
+            if (data.status === 'completed') return;
+            if (data.status === 'cancelled') throw new Error('cancelled');
+            if (data.status === 'error') throw new Error(data.message || 'Assembly failed');
+        }
+    }
+
+    async function runProUpscale(startTime) {
+        if (typeof ProUpscaler === 'undefined') {
+            onUpscaleError('Pro upscaler module not loaded.');
+            return;
+        }
+
+        try {
+            const total = state.videoInfo.duration * state.videoInfo.fps;
+            updateProgress({ progress: 0, message: 'Loading AI model...', current_frame: 0, total_frames: total }, startTime);
+
+            const upscaler = new ProUpscaler();
+            state.activeUpscaler = upscaler;
+            await upscaler.init('/static/models/realesr-general-x4v3.onnx');
+            const backend = upscaler.getBackend().toUpperCase();
+            updateProgress({ progress: 2, message: `Model loaded (${backend})`, current_frame: 0, total_frames: total }, startTime);
+
+            await proProcessVideo(state.file, state.taskId, state.videoInfo, upscaler,
+                (pct, msg, cur, tot) => updateProgress({
+                    progress: pct, message: `${msg} [${backend}]`,
+                    current_frame: cur, total_frames: tot,
+                }, startTime),
+                () => state.cancelRequested);
+
             state.activeUpscaler = null;
             upscaler.dispose();
+            onUpscaleComplete();
         } catch (err) {
             if (state.cancelRequested || err.message === 'cancelled') {
                 onUpscaleCancelled();
@@ -564,10 +582,32 @@
     }
 
     // In the desktop app the webview has no download manager, so downloads
-    // go through a native Save dialog + the local server. In browsers we
-    // fall back to a normal download.
+    // go through a native Save dialog + the local server. Browsers with the
+    // File System Access API (Chrome/Edge) get a real "Save As" dialog too;
+    // others fall back to a normal download.
     function desktopDialog() {
         return (window.__TAURI__ && window.__TAURI__.dialog) ? window.__TAURI__.dialog : null;
+    }
+
+    async function browserSaveAs(suggestedName, getBlob) {
+        if (!window.showSaveFilePicker) return false;
+        let handle;
+        try {
+            handle = await window.showSaveFilePicker({ suggestedName });
+        } catch (e) {
+            if (e && e.name === 'AbortError') return true; // user closed the dialog
+            return false; // API blocked here — use the fallback
+        }
+        try {
+            const blob = await getBlob();
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            showToast('Saved ' + suggestedName);
+        } catch (e) {
+            showToast('Save failed: ' + e.message);
+        }
+        return true;
     }
 
     async function saveServerResult(url, taskId, suggestedName) {
@@ -589,6 +629,11 @@
             }
             return;
         }
+        if (await browserSaveAs(suggestedName, async () => {
+            const r = await fetch(url);
+            if (!r.ok) throw new Error('download failed');
+            return r.blob();
+        })) return;
         const a = document.createElement('a');
         a.href = url;
         a.download = suggestedName;
@@ -619,6 +664,238 @@
         upscaledVideo.src = '';
         upscaledVideo.classList.add('hidden');
         outputPlaceholder.classList.remove('hidden');
+        fileInput.value = '';
+    }
+
+    // ======================= VIDEO BATCH =======================
+    // Multiple videos run sequentially through Basic mode (server FFmpeg) —
+    // video jobs saturate the CPU, so parallel would only slow everything.
+
+    const vbatch = {
+        items: [],       // { file, status, taskId, el }
+        running: false,
+        scale: 4,
+        cancelRequested: false,
+        currentTaskId: null,
+        activeUpscaler: null,
+    };
+
+    function enterVideoBatch(files) {
+        vbatch.items = files.map((file) => ({ file, status: 'pending', taskId: null, el: null }));
+        vbatch.running = false;
+        vbatch.cancelRequested = false;
+
+        uploadSection.classList.add('hidden');
+        appSection.classList.add('hidden');
+        $('#video-batch-section').classList.remove('hidden');
+
+        $('#vbatch-title').textContent = `Batch: ${vbatch.items.length} videos`;
+        $('#vbatch-sub').textContent = 'Pick a mode and scale, then start — videos run one at a time';
+        $('#vbatch-progress-label').textContent = '—';
+        $('#vbatch-zip-btn').classList.add('hidden');
+        $('#vbatch-start-btn').disabled = false;
+        $('#vbatch-reset-btn').textContent = 'Cancel';
+
+        const list = $('#vbatch-list');
+        list.innerHTML = '';
+        vbatch.items.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'vbatch-row';
+            const name = document.createElement('span');
+            name.className = 'vbatch-name';
+            name.textContent = item.file.name;
+            const size = document.createElement('span');
+            size.className = 'vbatch-size';
+            size.textContent = formatSize(item.file.size);
+            const bar = document.createElement('div');
+            bar.className = 'vbatch-bar';
+            const fill = document.createElement('div');
+            fill.className = 'vbatch-fill';
+            bar.appendChild(fill);
+            const status = document.createElement('span');
+            status.className = 'batch-status pending';
+            status.textContent = 'queued';
+            row.append(name, size, bar, status);
+            list.appendChild(row);
+            item.el = { row, status, fill };
+        });
+    }
+
+    function setVItem(item, cls, text, pct) {
+        item.el.status.className = 'batch-status ' + cls;
+        item.el.status.textContent = text;
+        if (pct !== undefined) item.el.fill.style.width = pct + '%';
+    }
+
+    async function startVideoBatch() {
+        if (vbatch.running || !vbatch.items.length) return;
+        const mode = $('#vbatch-mode').value;
+        if (mode === 'pro' && typeof ProUpscaler === 'undefined') {
+            showToast('Pro upscaler module not loaded.');
+            return;
+        }
+        vbatch.running = true;
+        vbatch.cancelRequested = false;
+        $('#vbatch-start-btn').disabled = true;
+        $('#vbatch-zip-btn').classList.add('hidden');
+        $('#vbatch-reset-btn').textContent = 'Cancel';
+
+        // Pro mode: load the browser AI model once for the whole batch
+        let upscaler = null;
+        if (mode === 'pro') {
+            try {
+                $('#vbatch-sub').textContent = 'Loading AI model...';
+                upscaler = new ProUpscaler();
+                vbatch.activeUpscaler = upscaler;
+                await upscaler.init('/static/models/realesr-general-x4v3.onnx');
+                $('#vbatch-sub').textContent = `AI upscaling in your browser (${upscaler.getBackend().toUpperCase()})`;
+            } catch (e) {
+                showToast('Could not load the AI model: ' + e.message);
+                vbatch.running = false;
+                vbatch.activeUpscaler = null;
+                $('#vbatch-start-btn').disabled = false;
+                return;
+            }
+        } else {
+            $('#vbatch-sub').textContent = 'Upscaling on the server (FFmpeg)';
+        }
+
+        let done = 0;
+        for (const item of vbatch.items) {
+            if (vbatch.cancelRequested) break;
+            $('#vbatch-progress-label').textContent = `${done + 1} / ${vbatch.items.length}`;
+            try {
+                await processOneVideo(item, mode, upscaler);
+                setVItem(item, 'done', 'done', 100);
+                addVItemSaveLink(item);
+            } catch (e) {
+                if (vbatch.cancelRequested || (e && e.message === 'cancelled')) {
+                    setVItem(item, 'failed', 'cancelled');
+                    break;
+                }
+                console.error('video batch item failed', e);
+                setVItem(item, 'failed', 'failed');
+            }
+            done++;
+        }
+        if (upscaler && upscaler.worker) upscaler.dispose();
+        vbatch.activeUpscaler = null;
+
+        const finished = vbatch.items.filter((i) => i.status === 'completed');
+        if (vbatch.cancelRequested) {
+            $('#vbatch-progress-label').textContent = 'Cancelled';
+            $('#vbatch-sub').textContent = `Cancelled — ${finished.length} finished before stopping`;
+        } else {
+            $('#vbatch-progress-label').textContent = 'Complete';
+            $('#vbatch-sub').textContent = `${finished.length} of ${vbatch.items.length} succeeded`;
+        }
+        if (finished.length) $('#vbatch-zip-btn').classList.remove('hidden');
+
+        vbatch.running = false;
+        vbatch.currentTaskId = null;
+        vbatch.cancelRequested = false;
+        $('#vbatch-start-btn').disabled = false;
+        $('#vbatch-reset-btn').textContent = 'Close';
+    }
+
+    async function processOneVideo(item, mode, upscaler) {
+        setVItem(item, 'working', 'uploading', 0);
+        const formData = new FormData();
+        formData.append('video', item.file);
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        item.taskId = data.task_id;
+        vbatch.currentTaskId = data.task_id;
+        if (vbatch.cancelRequested) throw new Error('cancelled');
+
+        if (mode === 'pro') {
+            await proProcessVideo(item.file, data.task_id, data.info, upscaler,
+                (pct) => setVItem(item, 'working', pct + '%', pct),
+                () => vbatch.cancelRequested);
+        } else {
+            const upRes = await fetch('/api/upscale/basic', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task_id: data.task_id, scale: vbatch.scale }),
+            });
+            if (!upRes.ok) throw new Error('Failed to start upscale');
+
+            // Poll progress (same endpoint the single-video fallback uses)
+            let failures = 0;
+            while (true) {
+                if (vbatch.cancelRequested) throw new Error('cancelled');
+                await new Promise((r) => setTimeout(r, 1000));
+                let s;
+                try {
+                    s = await fetchProgressOnce(data.task_id);
+                    failures = 0;
+                } catch {
+                    if (++failures > 15) throw new Error('Connection lost');
+                    continue;
+                }
+                if (!s) continue;
+                setVItem(item, 'working', (s.progress || 0) + '%', s.progress || 0);
+                if (s.status === 'completed') break;
+                if (s.status === 'cancelled') throw new Error('cancelled');
+                if (s.status === 'error') throw new Error(s.message || 'Server error');
+            }
+        }
+        item.status = 'completed';
+        vbatch.currentTaskId = null;
+    }
+
+    function addVItemSaveLink(item) {
+        const a = document.createElement('a');
+        a.textContent = 'save';
+        a.href = '#';
+        a.className = 'vbatch-save';
+        const stem = item.file.name.replace(/\.[^.]+$/, '');
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            saveServerResult(`/api/download/${item.taskId}`, item.taskId, `${stem}_4K.mp4`);
+        });
+        item.el.row.appendChild(a);
+    }
+
+    async function downloadVideoBatchZip() {
+        const ids = vbatch.items.filter((i) => i.status === 'completed').map((i) => i.taskId);
+        if (!ids.length) return;
+        const btn = $('#vbatch-zip-btn');
+        btn.disabled = true;
+        btn.textContent = 'Zipping...';
+        try {
+            const res = await fetch('/api/zip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ task_ids: ids }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Zip failed');
+            await saveServerResult(`/api/zip/${data.zip_id}`, data.zip_id, 'upscaled_videos.zip');
+        } catch (e) {
+            showToast('Zip failed: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Download All (.zip)';
+        }
+    }
+
+    function resetVideoBatch() {
+        if (vbatch.running) {
+            // While running, this button acts as Cancel
+            vbatch.cancelRequested = true;
+            if (vbatch.activeUpscaler) vbatch.activeUpscaler.cancel();
+            if (vbatch.currentTaskId) {
+                fetch(`/api/cancel/${vbatch.currentTaskId}`, { method: 'POST' }).catch(() => {});
+            }
+            $('#vbatch-sub').textContent = 'Cancelling...';
+            return;
+        }
+        vbatch.items = [];
+        $('#vbatch-list').innerHTML = '';
+        $('#video-batch-section').classList.add('hidden');
+        uploadSection.classList.remove('hidden');
         fileInput.value = '';
     }
 

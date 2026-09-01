@@ -445,9 +445,31 @@
     }
 
     // Desktop app: native Save dialog + local server (the webview has no
-    // download manager). Browsers: normal download.
+    // download manager). Browsers with the File System Access API
+    // (Chrome/Edge) get a "Save As" dialog too; others: normal download.
     function desktopDialog() {
         return (window.__TAURI__ && window.__TAURI__.dialog) ? window.__TAURI__.dialog : null;
+    }
+
+    async function browserSaveAs(suggestedName, getBlob) {
+        if (!window.showSaveFilePicker) return false;
+        let handle;
+        try {
+            handle = await window.showSaveFilePicker({ suggestedName });
+        } catch (e) {
+            if (e && e.name === 'AbortError') return true; // user closed the dialog
+            return false; // API blocked here — use the fallback
+        }
+        try {
+            const blob = await getBlob();
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            showToast('Saved ' + suggestedName);
+        } catch (e) {
+            showToast('Save failed: ' + e.message);
+        }
+        return true;
     }
 
     async function saveBlobResult(blob, suggestedName) {
@@ -468,6 +490,7 @@
             }
             return;
         }
+        if (await browserSaveAs(suggestedName, () => Promise.resolve(blob))) return;
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = suggestedName;
@@ -496,6 +519,11 @@
             }
             return;
         }
+        if (await browserSaveAs(suggestedName, async () => {
+            const r = await fetch(`/api/image/download/${taskId}`);
+            if (!r.ok) throw new Error('download failed');
+            return r.blob();
+        })) return;
         const a = document.createElement('a');
         a.href = `/api/image/download/${taskId}`;
         a.download = suggestedName;

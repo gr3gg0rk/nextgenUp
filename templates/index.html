@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NextGenUp — Free AI Image &amp; Video Upscaler (4K / 8K)</title>
-    <meta name="description" content="Free open-source AI image upscaler and video enhancer. Upscale photos to 8K and videos to 4K locally with Real-ESRGAN and GFPGAN face restoration — a free Topaz alternative with no cloud, no watermark, no subscription.">
-    <meta name="keywords" content="AI upscaler, image upscaler, video upscaler, 4K converter, upscale video to 4K, photo enhancer, super resolution, Real-ESRGAN, GFPGAN, face restoration, Topaz alternative, free upscaler, open source">
+    <title>NextGenUp — Free AI Photo &amp; Video Studio (Upscale, Remove BG, Erase, Restore)</title>
+    <meta name="description" content="Free open-source AI photo and video studio. Upscale photos to 8K and videos to 4K, remove backgrounds, erase objects, denoise, deblur, and colorize old photos — all locally. A free Topaz, remove.bg, and Magic Eraser alternative with no cloud, no watermark, no subscription.">
+    <meta name="keywords" content="AI upscaler, image upscaler, video upscaler, 4K converter, background remover, remove background free, magic eraser, object remover, denoise photo, deblur photo, colorize black and white photo, old photo restoration, photo enhancer, super resolution, Real-ESRGAN, BiRefNet, LaMa, DDColor, GFPGAN, Topaz alternative, remove.bg alternative, free upscaler, open source">
     <meta property="og:title" content="NextGenUp — Free AI Image & Video Upscaler">
     <meta property="og:description" content="Upscale photos to 8K and videos to 4K locally with AI. Free, open source, no watermark. A matily.org product.">
     <meta property="og:type" content="website">
@@ -126,6 +126,7 @@
         <!-- Sidebar Navigation -->
         <aside class="sidebar" id="sidebar">
             <nav class="sidebar-nav">
+                <span class="nav-section">Image</span>
                 <button class="nav-item active" data-tab="image" id="nav-image">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -134,6 +135,36 @@
                     </svg>
                     <span>Image Upscale</span>
                 </button>
+                <button class="nav-item" data-tab="bg" id="nav-bg">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M4 20c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5"/>
+                        <path d="M2 3l4 4M6 3L2 7" opacity="0.6"/>
+                    </svg>
+                    <span>Background Remover</span>
+                </button>
+                <button class="nav-item" data-tab="clean" id="nav-clean">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2z"/>
+                        <path d="M19 17l.7 2.3L22 20l-2.3.7L19 23l-.7-2.3L16 20l2.3-.7z"/>
+                    </svg>
+                    <span>Denoise &amp; Deblur</span>
+                </button>
+                <button class="nav-item" data-tab="erase" id="nav-erase">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 20H8.5L3 14.5a2 2 0 010-2.8l8.7-8.7a2 2 0 012.8 0l6 6a2 2 0 010 2.8L13 19.3"/>
+                        <path d="M8 9l7 7"/>
+                    </svg>
+                    <span>Magic Eraser</span>
+                </button>
+                <button class="nav-item" data-tab="restore" id="nav-restore">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="9"/>
+                        <polyline points="12 7 12 12 15.5 14"/>
+                    </svg>
+                    <span>Old Photo Restore</span>
+                </button>
+                <span class="nav-section">Video</span>
                 <button class="nav-item" data-tab="video" id="nav-video">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polygon points="23 7 16 12 23 17 23 7"/>
@@ -429,7 +460,7 @@
                 <!-- Upload Section -->
                 <section id="upload-section">
                     <div id="dropzone" class="dropzone">
-                        <input type="file" id="file-input" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/avi,.mp4,.mov,.webm,.mkv,.avi" hidden>
+                        <input type="file" id="file-input" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/avi,.mp4,.mov,.webm,.mkv,.avi" multiple hidden>
                         <div class="dropzone-content">
                             <div class="dropzone-icon">
                                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -438,9 +469,9 @@
                                     <line x1="12" y1="3" x2="12" y2="15"/>
                                 </svg>
                             </div>
-                            <h3>Drop your video here</h3>
-                            <p>or click to browse</p>
-                            <span class="dropzone-hint">MP4, MOV, WebM, MKV &bull; Max 2GB</span>
+                            <h3>Drop your videos here</h3>
+                            <p>or click to browse &mdash; multiple files for batch mode</p>
+                            <span class="dropzone-hint">MP4, MOV, WebM, MKV &bull; Max 2GB each</span>
                         </div>
                     </div>
                 </section>
@@ -602,6 +633,527 @@
                         </button>
                     </div>
                 </section>
+
+                <!-- Video Batch Section (multiple videos) -->
+                <section id="video-batch-section" class="hidden">
+                    <div class="batch-toolbar">
+                        <div>
+                            <h3 id="vbatch-title">Batch: 0 videos</h3>
+                            <p class="batch-sub" id="vbatch-sub">Videos are processed one at a time</p>
+                        </div>
+                        <div class="batch-actions">
+                            <button class="upscale-btn" id="vbatch-start-btn">Start Batch</button>
+                            <button class="download-btn hidden" id="vbatch-zip-btn">Download All (.zip)</button>
+                            <button class="new-video-btn" id="vbatch-reset-btn">Cancel</button>
+                        </div>
+                    </div>
+                    <div class="options-row batch-options">
+                        <div class="option-group">
+                            <label>Mode</label>
+                            <select id="vbatch-mode" class="batch-select">
+                                <option value="basic">Basic &mdash; server FFmpeg</option>
+                                <option value="pro">Pro &mdash; browser AI</option>
+                            </select>
+                        </div>
+                        <div class="option-group">
+                            <label>Scale Factor</label>
+                            <div class="scale-buttons">
+                                <button class="scale-btn" data-vbatchscale="2">2x</button>
+                                <button class="scale-btn selected" data-vbatchscale="4">4x</button>
+                            </div>
+                        </div>
+                        <div class="option-group">
+                            <label>Progress</label>
+                            <span class="output-res" id="vbatch-progress-label">&mdash;</span>
+                        </div>
+                    </div>
+                    <div class="vbatch-list" id="vbatch-list"></div>
+                </section>
+            </main>
+
+            <!-- ===================== BACKGROUND REMOVER TAB ===================== -->
+            <main class="tab-content" id="tab-bg">
+                <!-- One-time model setup -->
+                <section id="bg-setup-section" class="hidden">
+                    <div class="bg-setup-card">
+                        <h3>One-time setup</h3>
+                        <p>Background removal uses the BiRefNet AI model (224 MB, MIT license).
+                           Download it once and everything runs locally after that.</p>
+                        <button class="upscale-btn" id="bg-model-btn">Download AI Model</button>
+                        <div class="progress-track hidden" id="bg-model-track">
+                            <div class="progress-fill" id="bg-model-fill"></div>
+                        </div>
+                        <p class="bg-setup-status" id="bg-model-status"></p>
+                    </div>
+                </section>
+
+                <!-- Upload -->
+                <section id="bg-upload-section" class="hidden">
+                    <div id="bg-dropzone" class="dropzone">
+                        <input type="file" id="bg-file-input" accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff,.png,.jpg,.jpeg,.webp,.bmp,.tiff,.tif" multiple hidden>
+                        <div class="dropzone-content">
+                            <div class="dropzone-icon">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="8" r="4"/>
+                                    <path d="M4 20c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5"/>
+                                </svg>
+                            </div>
+                            <h3>Drop your images here</h3>
+                            <p>or click to browse &mdash; multiple files for batch mode</p>
+                            <span class="dropzone-hint">PNG, JPG, WebP, BMP, TIFF &bull; Max 50MB each</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Single image -->
+                <section id="bg-app-section" class="hidden">
+                    <div class="image-compare-container">
+                        <div class="image-panel">
+                            <div class="panel-header">
+                                <span class="panel-label">Original</span>
+                                <span class="panel-badge" id="bg-original-res"></span>
+                            </div>
+                            <div class="image-wrapper">
+                                <img id="bg-original" alt="Original image">
+                            </div>
+                        </div>
+                        <div class="image-panel">
+                            <div class="panel-header">
+                                <span class="panel-label">Result</span>
+                                <span class="panel-badge" id="bg-result-res"></span>
+                            </div>
+                            <div class="image-wrapper checkerboard">
+                                <img id="bg-result" alt="Result image" class="hidden">
+                                <div id="bg-output-placeholder" class="output-placeholder">
+                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="8" r="4"/>
+                                        <path d="M4 20c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5"/>
+                                    </svg>
+                                    <p>Cutout will appear here</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Background choice -->
+                    <div class="options-row">
+                        <div class="option-group">
+                            <label>Background</label>
+                            <div class="scale-buttons" id="bg-choice-buttons">
+                                <button class="scale-btn selected" data-bgchoice="transparent">Transparent</button>
+                                <button class="scale-btn" data-bgchoice="#ffffff">White</button>
+                                <button class="scale-btn" data-bgchoice="custom">Custom</button>
+                                <input type="color" id="bg-color-picker" value="#00b894" class="hidden">
+                            </div>
+                        </div>
+                        <button class="upscale-btn" id="bg-start-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 3l18 18" opacity="0"/>
+                                <circle cx="12" cy="8" r="4"/>
+                                <path d="M4 20c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5"/>
+                            </svg>
+                            Remove Background
+                        </button>
+                    </div>
+
+                    <!-- Progress -->
+                    <div id="bg-progress-section" class="progress-section hidden">
+                        <div class="progress-header">
+                            <span id="bg-progress-message">Processing...</span>
+                            <span class="progress-right">
+                                <span id="bg-progress-percent">0%</span>
+                                <button class="cancel-btn" id="bg-cancel-btn">Cancel</button>
+                            </span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="bg-progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <!-- Download -->
+                    <div id="bg-download-section" class="download-section hidden">
+                        <div class="download-card">
+                            <div class="download-info">
+                                <h3>Background Removed!</h3>
+                                <p id="bg-download-details"></p>
+                            </div>
+                            <button class="download-btn" id="bg-download-btn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Download PNG
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="new-video-row hidden" id="bg-new-row">
+                        <button class="new-video-btn" id="bg-new-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Upload New Image
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Batch -->
+                <section id="bg-batch-section" class="hidden">
+                    <div class="batch-toolbar">
+                        <div>
+                            <h3 id="bg-batch-title">Batch: 0 images</h3>
+                            <p class="batch-sub" id="bg-batch-sub">Pick a background, then start</p>
+                        </div>
+                        <div class="batch-actions">
+                            <button class="upscale-btn" id="bg-batch-start-btn">Start Batch</button>
+                            <button class="download-btn hidden" id="bg-batch-zip-btn">Download All (.zip)</button>
+                            <button class="new-video-btn" id="bg-batch-reset-btn">Cancel</button>
+                        </div>
+                    </div>
+                    <div class="options-row batch-options">
+                        <div class="option-group">
+                            <label>Background</label>
+                            <div class="scale-buttons" id="bg-batch-choice-buttons">
+                                <button class="scale-btn selected" data-bgbatchchoice="transparent">Transparent</button>
+                                <button class="scale-btn" data-bgbatchchoice="#ffffff">White</button>
+                                <button class="scale-btn" data-bgbatchchoice="custom">Custom</button>
+                                <input type="color" id="bg-batch-color-picker" value="#00b894" class="hidden">
+                            </div>
+                        </div>
+                        <div class="option-group">
+                            <label>Progress</label>
+                            <span class="output-res" id="bg-batch-progress-label">&mdash;</span>
+                        </div>
+                    </div>
+                    <div class="batch-grid" id="bg-batch-grid"></div>
+                </section>
+            </main>
+
+            <!-- ===================== DENOISE & DEBLUR TAB ===================== -->
+            <main class="tab-content" id="tab-clean">
+                <section id="clean-upload-section">
+                    <div id="clean-dropzone" class="dropzone">
+                        <input type="file" id="clean-file-input" accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff,.png,.jpg,.jpeg,.webp,.bmp,.tiff,.tif" multiple hidden>
+                        <div class="dropzone-content">
+                            <div class="dropzone-icon">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2z"/>
+                                    <path d="M19 17l.7 2.3L22 20l-2.3.7L19 23l-.7-2.3L16 20l2.3-.7z"/>
+                                </svg>
+                            </div>
+                            <h3>Drop noisy or blurry images here</h3>
+                            <p>or click to browse &mdash; multiple files for batch mode</p>
+                            <span class="dropzone-hint">PNG, JPG, WebP, BMP, TIFF &bull; Max 50MB each</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="clean-app-section" class="hidden">
+                    <div class="image-compare-container">
+                        <div class="image-panel">
+                            <div class="panel-header">
+                                <span class="panel-label">Original</span>
+                                <span class="panel-badge" id="clean-original-res"></span>
+                            </div>
+                            <div class="image-wrapper">
+                                <img id="clean-original" alt="Original image">
+                            </div>
+                        </div>
+                        <div class="image-panel">
+                            <div class="panel-header">
+                                <span class="panel-label">Result</span>
+                                <span class="panel-badge" id="clean-result-res"></span>
+                            </div>
+                            <div class="image-wrapper">
+                                <img id="clean-result" alt="Result image" class="hidden">
+                                <div id="clean-output-placeholder" class="output-placeholder">
+                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2z"/>
+                                    </svg>
+                                    <p>Cleaned image will appear here</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="options-row">
+                        <div class="option-group">
+                            <label>Fix</label>
+                            <div class="scale-buttons" id="clean-mode-buttons">
+                                <button class="scale-btn selected" data-cleanmode="denoise">Remove Noise</button>
+                                <button class="scale-btn" data-cleanmode="deblur">Remove Blur</button>
+                            </div>
+                        </div>
+                        <div class="option-group">
+                            <label>Best For</label>
+                            <span class="output-res" id="clean-mode-hint">Grainy low-light photos, ISO noise</span>
+                        </div>
+                        <button class="upscale-btn" id="clean-start-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2z"/>
+                            </svg>
+                            Clean Image
+                        </button>
+                    </div>
+
+                    <div id="clean-progress-section" class="progress-section hidden">
+                        <div class="progress-header">
+                            <span id="clean-progress-message">Processing...</span>
+                            <span class="progress-right">
+                                <span id="clean-progress-percent">0%</span>
+                                <button class="cancel-btn" id="clean-cancel-btn">Cancel</button>
+                            </span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="clean-progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <div id="clean-download-section" class="download-section hidden">
+                        <div class="download-card">
+                            <div class="download-info">
+                                <h3>Image Cleaned!</h3>
+                                <p id="clean-download-details"></p>
+                            </div>
+                            <button class="download-btn" id="clean-download-btn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Download PNG
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="new-video-row hidden" id="clean-new-row">
+                        <button class="new-video-btn" id="clean-new-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Upload New Image
+                        </button>
+                    </div>
+                </section>
+
+                <section id="clean-batch-section" class="hidden">
+                    <div class="batch-toolbar">
+                        <div>
+                            <h3 id="clean-batch-title">Batch: 0 images</h3>
+                            <p class="batch-sub" id="clean-batch-sub">Pick a fix, then start</p>
+                        </div>
+                        <div class="batch-actions">
+                            <button class="upscale-btn" id="clean-batch-start-btn">Start Batch</button>
+                            <button class="download-btn hidden" id="clean-batch-zip-btn">Download All (.zip)</button>
+                            <button class="new-video-btn" id="clean-batch-reset-btn">Cancel</button>
+                        </div>
+                    </div>
+                    <div class="options-row batch-options">
+                        <div class="option-group">
+                            <label>Fix</label>
+                            <div class="scale-buttons" id="clean-batch-mode-buttons">
+                                <button class="scale-btn selected" data-cleanbatchmode="denoise">Remove Noise</button>
+                                <button class="scale-btn" data-cleanbatchmode="deblur">Remove Blur</button>
+                            </div>
+                        </div>
+                        <div class="option-group">
+                            <label>Progress</label>
+                            <span class="output-res" id="clean-batch-progress-label">&mdash;</span>
+                        </div>
+                    </div>
+                    <div class="batch-grid" id="clean-batch-grid"></div>
+                </section>
+            </main>
+
+            <!-- ===================== MAGIC ERASER TAB ===================== -->
+            <main class="tab-content" id="tab-erase">
+                <section id="erase-upload-section">
+                    <div id="erase-dropzone" class="dropzone">
+                        <input type="file" id="erase-file-input" accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff,.png,.jpg,.jpeg,.webp,.bmp,.tiff,.tif" hidden>
+                        <div class="dropzone-content">
+                            <div class="dropzone-icon">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 20H8.5L3 14.5a2 2 0 010-2.8l8.7-8.7a2 2 0 012.8 0l6 6a2 2 0 010 2.8L13 19.3"/>
+                                    <path d="M8 9l7 7"/>
+                                </svg>
+                            </div>
+                            <h3>Drop an image here</h3>
+                            <p>then brush over anything you want gone</p>
+                            <span class="dropzone-hint">People, wires, trash, photobombers &bull; Max 50MB</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="erase-app-section" class="hidden">
+                    <div class="erase-editor">
+                        <div class="erase-canvas-wrap" id="erase-canvas-wrap">
+                            <canvas id="erase-canvas"></canvas>
+                            <canvas id="erase-overlay"></canvas>
+                        </div>
+                        <div class="erase-toolbar">
+                            <div class="option-group">
+                                <label>Brush Size</label>
+                                <input type="range" id="erase-brush-size" min="8" max="120" value="36" class="erase-slider">
+                            </div>
+                            <button class="new-video-btn" id="erase-clear-btn">Clear Brush</button>
+                            <button class="new-video-btn" id="erase-undo-btn" disabled>Undo Erase</button>
+                            <button class="upscale-btn" id="erase-start-btn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 20H8.5L3 14.5a2 2 0 010-2.8l8.7-8.7a2 2 0 012.8 0l6 6a2 2 0 010 2.8L13 19.3"/>
+                                </svg>
+                                Erase
+                            </button>
+                        </div>
+                        <p class="erase-hint">Brush over the object to remove, then press Erase. Repeat as many times as you like.</p>
+                    </div>
+
+                    <div id="erase-progress-section" class="progress-section hidden">
+                        <div class="progress-header">
+                            <span id="erase-progress-message">Processing...</span>
+                            <span class="progress-right">
+                                <span id="erase-progress-percent">0%</span>
+                                <button class="cancel-btn" id="erase-cancel-btn">Cancel</button>
+                            </span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="erase-progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <div id="erase-download-section" class="download-section hidden">
+                        <div class="download-card">
+                            <div class="download-info">
+                                <h3>Object Erased!</h3>
+                                <p id="erase-download-details">Keep brushing to remove more, or download.</p>
+                            </div>
+                            <button class="download-btn" id="erase-download-btn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Download PNG
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="new-video-row hidden" id="erase-new-row">
+                        <button class="new-video-btn" id="erase-new-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Upload New Image
+                        </button>
+                    </div>
+                </section>
+            </main>
+
+            <!-- ===================== OLD PHOTO RESTORE TAB ===================== -->
+            <main class="tab-content" id="tab-restore">
+                <section id="restore-upload-section">
+                    <div id="restore-dropzone" class="dropzone">
+                        <input type="file" id="restore-file-input" accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff,.png,.jpg,.jpeg,.webp,.bmp,.tiff,.tif" hidden>
+                        <div class="dropzone-content">
+                            <div class="dropzone-icon">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="9"/>
+                                    <polyline points="12 7 12 12 15.5 14"/>
+                                </svg>
+                            </div>
+                            <h3>Drop an old photo here</h3>
+                            <p>colorize black &amp; white, restore faces, recover detail</p>
+                            <span class="dropzone-hint">PNG, JPG, WebP, BMP, TIFF &bull; Max 50MB</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="restore-app-section" class="hidden">
+                    <div class="image-compare-container">
+                        <div class="image-panel">
+                            <div class="panel-header">
+                                <span class="panel-label">Original</span>
+                                <span class="panel-badge" id="restore-original-res"></span>
+                            </div>
+                            <div class="image-wrapper">
+                                <img id="restore-original" alt="Original photo">
+                            </div>
+                        </div>
+                        <div class="image-panel">
+                            <div class="panel-header">
+                                <span class="panel-label">Restored</span>
+                                <span class="panel-badge" id="restore-result-res"></span>
+                            </div>
+                            <div class="image-wrapper">
+                                <img id="restore-result" alt="Restored photo" class="hidden">
+                                <div id="restore-output-placeholder" class="output-placeholder">
+                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="12" r="9"/>
+                                        <polyline points="12 7 12 12 15.5 14"/>
+                                    </svg>
+                                    <p>Restored photo will appear here</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="options-row">
+                        <div class="option-group">
+                            <label>Restore</label>
+                            <div class="restore-toggles">
+                                <label class="face-toggle"><input type="checkbox" id="restore-colorize" checked> Colorize (B&amp;W to color)</label>
+                                {% if face_restore %}<label class="face-toggle"><input type="checkbox" id="restore-face"> Restore faces</label>{% endif %}
+                                {% if server_ai %}<label class="face-toggle"><input type="checkbox" id="restore-enhance"> Enhance detail</label>{% endif %}
+                            </div>
+                        </div>
+                        <button class="upscale-btn" id="restore-start-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="9"/>
+                                <polyline points="12 7 12 12 15.5 14"/>
+                            </svg>
+                            Restore Photo
+                        </button>
+                    </div>
+
+                    <div id="restore-progress-section" class="progress-section hidden">
+                        <div class="progress-header">
+                            <span id="restore-progress-message">Processing...</span>
+                            <span class="progress-right">
+                                <span id="restore-progress-percent">0%</span>
+                                <button class="cancel-btn" id="restore-cancel-btn">Cancel</button>
+                            </span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill" id="restore-progress-fill"></div>
+                        </div>
+                    </div>
+
+                    <div id="restore-download-section" class="download-section hidden">
+                        <div class="download-card">
+                            <div class="download-info">
+                                <h3>Photo Restored!</h3>
+                                <p id="restore-download-details"></p>
+                            </div>
+                            <button class="download-btn" id="restore-download-btn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Download PNG
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="new-video-row hidden" id="restore-new-row">
+                        <button class="new-video-btn" id="restore-new-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Upload New Photo
+                        </button>
+                    </div>
+                </section>
             </main>
 
         </div><!-- /content-area -->
@@ -623,5 +1175,7 @@
     <script src="/static/js/pro-upscaler.js"></script>
     <script src="/static/js/app.js"></script>
     <script src="/static/js/image-app.js"></script>
+    <script src="/static/js/bg-app.js"></script>
+    <script src="/static/js/tools-app.js"></script>
 </body>
 </html>

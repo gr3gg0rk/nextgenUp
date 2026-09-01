@@ -22,8 +22,9 @@ tasks.db
 test_*.mp4
 test_*.png
 
-# ONNX model (too large for git, downloaded via setup.sh)
+# ONNX models (too large for git — downloaded via setup.sh or in-app)
 static/models/*.onnx
+models/
 
 # OS
 .DS_Store

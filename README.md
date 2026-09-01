@@ -10,25 +10,28 @@
   <a href="https://github.com/riponcm/nextgenUp/stargazers"><img src="https://img.shields.io/github/stars/riponcm/nextgenUp?style=for-the-badge&color=fdcb6e&label=Stars" alt="GitHub stars"></a>
 </p>
 
-**NextGenUp** is a free, open-source **AI image upscaler and video enhancer**: it turns low-resolution photos and videos into crisp, high-resolution versions — **upscale video to 4K** and **images to 8K** — using Real-ESRGAN super-resolution and GFPGAN face restoration, entirely on your own machine. A free alternative to **Topaz Gigapixel AI** and **Topaz Video AI** with no cloud, no subscription, no watermarks, and no upload of your files to anyone's server.
+**NextGenUp** is a free, open-source **AI photo and video studio**: upscale images to 8K and videos to 4K, **remove backgrounds**, **erase unwanted objects**, **denoise and deblur photos**, and **colorize old black-and-white pictures** — using Real-ESRGAN, BiRefNet, LaMa, SCUNet, NAFNet, DDColor, and GFPGAN face restoration, entirely on your own machine. A free alternative to **Topaz Gigapixel AI**, **Topaz Video AI**, **remove.bg**, and **Magic Eraser** with no cloud, no subscription, no watermarks, and no upload of your files to anyone's server.
 
 A [matily.org](https://matily.org) product. Free and open source under the MIT license.
 
 ## Why NextGenUp
 
-| | NextGenUp | Topaz Photo / Video AI | Upscayl | Video2X |
-|---|---|---|---|---|
-| Price | Free, MIT | ~$199/year | Free | Free |
-| Image upscaling | Yes, to 8K | Yes | Yes | No |
-| Video upscaling | Yes, to 4K | Yes | No | Yes |
-| Face restoration | Yes (GFPGAN) | Yes | No | No |
-| Same-size enhance mode | Yes | Yes | No | No |
-| Batch + zip export | Yes | Yes | Yes | Partial |
-| Runs fully offline | Yes | Yes | Yes | Yes |
-| Point-and-click GUI | Yes | Yes | Yes | Partial |
-| Also usable from any browser on your network | Yes | No | No | No |
+| | NextGenUp | Topaz Photo / Video AI | remove.bg | Upscayl | Video2X |
+|---|---|---|---|---|---|
+| Price | Free, MIT | ~$199/year | ~$0.20+/image | Free | Free |
+| Image upscaling | Yes, to 8K | Yes | No | Yes | No |
+| Video upscaling | Yes, to 4K | Yes | No | No | Yes |
+| Background removal | Yes (BiRefNet) | No | Yes | No | No |
+| Object eraser (magic eraser) | Yes (LaMa) | No | No | No | No |
+| Denoise and deblur | Yes (SCUNet / NAFNet) | Yes | No | No | No |
+| Old photo colorization | Yes (DDColor) | No | No | No | No |
+| Face restoration | Yes (GFPGAN) | Yes | No | No | No |
+| Same-size enhance mode | Yes | Yes | No | No | No |
+| Batch + zip export | Yes | Yes | Paid API | Yes | Partial |
+| Runs fully offline | Yes | Yes | No (cloud) | Yes | Yes |
+| Also usable from any browser on your network | Yes | No | n/a | No | No |
 
-Excellent tools all around — NextGenUp's niche is covering **images and video and faces** in one simple app that is free forever.
+Excellent tools all around — NextGenUp's niche is covering **images, video, faces, backgrounds, and restoration** in one simple app that is free forever.
 
 ---
 
@@ -69,6 +72,16 @@ macOS note: builds are not notarized with Apple; on first launch, right-click th
 </p>
 
 <p align="center">
+  <img src="assets/screens/bg-remove.png" alt="AI background remover: portrait cut out to a transparent PNG with one click" width="425">
+  <img src="assets/screens/eraser.png" alt="Magic Eraser: brush over an unwanted object and AI removes it" width="425">
+</p>
+
+<p align="center">
+  <img src="assets/screens/restore.png" alt="Old Photo Restore: black and white photo colorized with AI" width="425">
+  <img src="assets/screens/denoise.png" alt="Denoise and deblur: grainy night photo cleaned with AI" width="425">
+</p>
+
+<p align="center">
   <img src="assets/screens/batch.png" alt="Batch processing multiple images with per-item progress" width="640">
 </p>
 
@@ -77,10 +90,15 @@ macOS note: builds are not notarized with Apple; on first launch, right-click th
 | | |
 |---|---|
 | Image upscaling | Four modes — Quick (browser AI), Quality (FFmpeg), Enhance (same size, AI cleanup), Ultra (server AI, works from any device) |
-| Video upscaling | Basic (FFmpeg Lanczos + CAS sharpening) and Pro (Real-ESRGAN, frame by frame) |
+| Background remover | BiRefNet segmentation with feathered edges — transparent PNG, white, or any custom color background |
+| Denoise and deblur | SCUNet removes grain and ISO noise; NAFNet removes motion blur and camera shake |
+| Magic Eraser | Brush over people, wires, trash, or photobombers and LaMa inpainting removes them — repeat as often as you like, with undo |
+| Old Photo Restore | DDColor colorizes black-and-white photos; combine with face restoration and detail enhancement in one pass |
+| Video upscaling | Basic (FFmpeg Lanczos + CAS sharpening) and Pro (Real-ESRGAN, frame by frame), single or bulk |
 | Enhance mode | Keep the original resolution but reconstruct detail — noise, blur, and JPEG artifacts removed |
 | Face restoration | GFPGAN v1.4 — detected faces are aligned, restored, and seamlessly blended back |
-| Batch processing | Drop multiple images, process with any mode, download all as a zip |
+| Batch processing | Drop multiple images or videos, process them all, download results individually or as one zip |
+| On-demand AI models | The optional models download on first use with a progress bar, so the installer stays small |
 | Before/after slider | Drag a divider across the result to compare against the original |
 | Cancellable jobs | Every job can be cancelled mid-run; switch modes and restart instantly |
 | Portrait and landscape | Orientation handled automatically; output capped at 4K (video) / 8K (image) |
@@ -88,21 +106,22 @@ macOS note: builds are not notarized with Apple; on first launch, right-click th
 
 ## How to use
 
-1. Open NextGenUp and choose **Image Upscale** or **Video Upscale** in the sidebar.
-2. Drop a file onto the dropzone (or click to browse — select several images for batch mode).
-3. Pick a mode:
+1. Open NextGenUp and pick a tool in the sidebar:
 
-   | Mode | Best for |
-   |------|----------|
-   | Quick | Fast AI upscaling in your browser or the app window |
-   | Quality | Sharp non-AI upscaling on the server, very fast |
-   | Enhance | Same-size cleanup — "keep it 500x500 but make it crystal clear" |
-   | Ultra | Highest-quality AI on the server; also the mode for phones and browsers without WebGPU |
+   | Tool | What it does |
+   |------|--------------|
+   | Image Upscale | Quick (browser AI), Quality (FFmpeg), Enhance (same size), or Ultra (server AI) — 2x or 4x, up to 8K |
+   | Background Remover | Cut the subject out to a transparent PNG, or place it on white or any color |
+   | Denoise & Deblur | Remove Noise for grainy low-light photos; Remove Blur for motion blur and camera shake |
+   | Magic Eraser | Brush over anything unwanted, press Erase, repeat — with undo |
+   | Old Photo Restore | Colorize black-and-white photos, restore faces, and enhance detail in one pass |
+   | Video Upscale | Basic (fast FFmpeg) or Pro (frame-by-frame AI) — drop several videos for a batch queue |
 
-4. Choose the scale factor (2x or 4x), then press **Start Upscaling**.
-5. Watch the live progress (cancel any time), compare the result with the before/after slider, and download.
+2. Drop a file onto the dropzone (or click to browse — select several files for batch mode).
+3. Press the action button. If a tool's AI model is not installed yet, it downloads once with a progress bar and then runs.
+4. Watch the live progress (cancel any time), compare the result, and download — single files or everything as one zip.
 
-For portraits, tick **Restore faces** in Ultra mode to run GFPGAN face restoration on every detected face.
+For portraits, tick **Restore faces** (Ultra mode and Old Photo Restore) to run GFPGAN face restoration on every detected face.
 
 ## Run from source (web app)
 
@@ -138,7 +157,7 @@ Quick / Enhance / Pro
                                       FFmpeg assembles video + audio
 ```
 
-The AI model is [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (`realesr-general-x4v3`, ~5 MB ONNX). Images are processed in overlapping tiles so any resolution fits in memory; inference runs in a Web Worker (browser) or a background thread (server) so the interface never freezes. Completed tasks persist in SQLite, and files older than 24 hours are cleaned up automatically.
+The upscaling model is [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (`realesr-general-x4v3`, ~5 MB ONNX, bundled). The other tools use optional ONNX models that download on first use into the app's data folder: BiRefNet-lite (~224 MB, background removal), SCUNet (~77 MB, denoise), NAFNet (~92 MB, deblur), DDColor-tiny (~135 MB, colorization), and LaMa (~208 MB, object removal) — all MIT or Apache-2.0 licensed. Images are processed in overlapping tiles or windows so any resolution fits in memory; inference runs in a Web Worker (browser) or a background thread (server) so the interface never freezes. Completed tasks persist in SQLite, and files older than 24 hours are cleaned up automatically.
 
 ## Configuration
 
@@ -153,13 +172,18 @@ Upload limit is 2 GB. Face restoration requires the GFPGAN model (~340 MB): answ
 ## Project layout
 
 ```
-app.py                     Flask server: upload, upscale, progress, download
+app.py                     Flask server: upload, process, progress, download, zip
 ai_engine.py               Server-side Real-ESRGAN (ONNX Runtime, tiled)
+bg_remove.py               BiRefNet background removal
+restore_engine.py          SCUNet denoise, NAFNet deblur, DDColor colorize, LaMa inpaint
+model_store.py             Registry + on-demand downloader for the optional AI models
 face_restore.py            GFPGAN face restoration + YuNet detection
 paths.py                   Dev vs. packaged path resolution
-templates/index.html       Dashboard (Image Upscale / Video Upscale)
-static/js/app.js           Video controller, navigation, About dialog
-static/js/image-app.js     Image controller: modes, batch, compare slider
+templates/index.html       Dashboard (all tools)
+static/js/app.js           Video controller (single + batch), navigation, About dialog
+static/js/image-app.js     Image upscale controller: modes, batch, compare slider
+static/js/bg-app.js        Background remover controller
+static/js/tools-app.js     Denoise/deblur, Magic Eraser, and Old Photo Restore controllers
 static/js/pro-worker.js    ONNX inference worker (tiling, WebGPU/WASM)
 src-tauri/                 Desktop shell (Tauri 2): sidecar, auto-updater
 nextgenup-server.spec      PyInstaller build for the bundled server
@@ -179,11 +203,11 @@ Installers for macOS (Intel and Apple Silicon), Windows x64, and Linux are compi
 
 ## Roadmap
 
+- Frame interpolation and AI slow motion (RIFE) — 24 to 60/120 fps
+- Video background removal (Robust Video Matting)
 - Larger server models (Real-ESRGAN x4plus, HAT) for a maximum-quality tier
 - Face restoration for video frames
-- WebCodecs-based frame extraction for faster Pro video
-- In-app GFPGAN model download
-- Docker image
+- One-button automatic photo restoration pipeline
 
 ## Frequently asked questions
 
@@ -197,7 +221,19 @@ Yes, for most use cases. NextGenUp uses Real-ESRGAN — the same family of super
 No. Everything runs locally on your machine — the AI models, FFmpeg, and the server all execute on your own hardware. Your files never leave your computer.
 
 **What AI models does NextGenUp use?**
-Real-ESRGAN (`realesr-general-x4v3`) for super-resolution, GFPGAN v1.4 for face restoration, and YuNet for face detection, all running through ONNX Runtime.
+Real-ESRGAN for super-resolution, BiRefNet for background removal, LaMa for object removal, SCUNet for denoising, NAFNet for deblurring, DDColor for colorization, GFPGAN v1.4 for face restoration, and YuNet for face detection — all running locally through ONNX Runtime, all under MIT or Apache-2.0 licenses.
+
+**Is NextGenUp a free alternative to remove.bg?**
+Yes. The Background Remover uses BiRefNet, a state-of-the-art segmentation model, and outputs a transparent PNG (or any background color you choose) with no per-image fees, no signup, and no upload — including batch removal with zip export.
+
+**How do I remove an object or a person from a photo?**
+Open Magic Eraser, drop your photo, brush over whatever you want gone, and press Erase. LaMa inpainting reconstructs the background behind the object. You can brush and erase repeatedly, and undo any step.
+
+**Can it colorize old black-and-white photos?**
+Yes. Old Photo Restore uses DDColor to add realistic color to black-and-white or sepia photos. Tick "Restore faces" and "Enhance detail" to also repair faces and recover sharpness in the same pass.
+
+**Do the AI models make the app download huge?**
+No. The installer ships only the small upscaling model. The optional tools (background removal, denoise, deblur, colorize, eraser) each download their model once on first use, with a progress bar, ranging from 77 MB to 224 MB. Tools you never open download nothing.
 
 **How do I upscale a video to 4K?**
 Open the Video Upscale tab, drop in your video, choose Basic (fast) or Pro (AI), select 4x, and press Start Upscaling. A 720p video becomes 4K (3840x2160); portrait videos are handled automatically. Audio is preserved.
@@ -226,12 +262,19 @@ If NextGenUp is useful to you, please [star the repository](https://github.com/r
 NextGenUp stands on excellent open work:
 
 - [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (Xintao Wang et al.) — super-resolution models
+- [BiRefNet](https://github.com/ZhengPeng7/BiRefNet) (Zheng Peng et al.) — background segmentation
+- [LaMa](https://github.com/advimman/lama) (Samsung AI) — large-mask inpainting for the Magic Eraser
+- [SCUNet](https://github.com/cszn/SCUNet) (Kai Zhang et al.) — real-world image denoising
+- [NAFNet](https://github.com/megvii-research/NAFNet) (Megvii Research) — image deblurring
+- [DDColor](https://github.com/piddnad/DDColor) (Xiaoyang Kang et al.) — photo colorization
 - [GFPGAN](https://github.com/TencentARC/GFPGAN) (Tencent ARC) — face restoration
 - [YuNet](https://github.com/opencv/opencv_zoo) (OpenCV Zoo) — face detection
 - [FFmpeg](https://ffmpeg.org) — video processing (bundled builds are GPL; FFmpeg keeps its own license)
 - [ONNX Runtime](https://onnxruntime.ai) — AI inference on server and in the browser
 - [Tauri](https://tauri.app) — desktop shell
 - [Flask](https://flask.palletsprojects.com) — local server
+
+Model weights keep the licenses of their upstream projects (MIT / Apache-2.0); they are downloaded from their public releases on first use, never bundled or re-hosted.
 
 Built and maintained by [Matily](https://matily.org), with [projectmem](https://github.com/riponcm/projectmem) providing persistent project memory during development.
 

@@ -17,7 +17,7 @@ from flask import Flask, Response, jsonify, render_template, request, send_file
 
 import paths
 
-VERSION = '1.0.2'
+VERSION = '1.1.0'
 
 try:
     import ai_engine
@@ -31,6 +31,19 @@ try:
     FACE_RESTORE = SERVER_AI and _face_restore.available()
 except Exception:
     FACE_RESTORE = False
+
+try:
+    import bg_remove
+except Exception:
+    bg_remove = None
+
+try:
+    import model_store
+    import restore_engine
+except Exception as e:
+    print(f'[startup] restore tools unavailable: {e}', flush=True)
+    model_store = None
+    restore_engine = None
 
 def _find_bin(name):
     """Find a binary next to the packaged executable, in PATH, or in
@@ -198,7 +211,8 @@ def llms_txt():
 @app.route('/api/capabilities')
 def capabilities():
     return jsonify({'server_ai': SERVER_AI, 'face_restore': FACE_RESTORE,
-                    'ffmpeg': FFMPEG_OK, 'version': VERSION})
+                    'ffmpeg': FFMPEG_OK, 'version': VERSION,
+                    'bg_remove': bool(bg_remove and bg_remove.available())})
 
 
 # Domains the About dialog may open in the system browser. The desktop
@@ -232,7 +246,9 @@ def _find_output(task_id):
     if task and task.get('output') and os.path.exists(task['output']):
         return task['output']
     if _safe_task_id(task_id):
-        for suffix in ('_basic_4k.mp4', '_pro_4k.mp4', '_upscaled.png'):
+        for suffix in ('_basic_4k.mp4', '_pro_4k.mp4', '_upscaled.png',
+                       '_nobg.png', '_clean.png', '_restored.png',
+                       '_erased.png', '.zip'):
             p = os.path.join(app.config['OUTPUT_FOLDER'], task_id + suffix)
             if os.path.exists(p):
                 return p
@@ -613,16 +629,356 @@ def image_download(task_id):
         output_path = task.get('output')
         if output_path and os.path.exists(output_path):
             stem = Path(task['filename']).stem
-            download_name = f"{stem}_upscaled.png"
+            download_name = f"{stem}{task.get('name_suffix', '_upscaled')}.png"
             return send_file(output_path, as_attachment=True, download_name=download_name)
 
     # Fallback: find file on disk after server restart
     if _safe_task_id(task_id):
-        path = os.path.join(app.config['OUTPUT_FOLDER'], task_id + '_upscaled.png')
-        if os.path.exists(path):
-            return send_file(path, as_attachment=True, download_name=f"{task_id}_upscaled.png")
+        for suffix in ('_upscaled.png', '_nobg.png', '_clean.png',
+                       '_restored.png', '_erased.png'):
+            path = os.path.join(app.config['OUTPUT_FOLDER'], task_id + suffix)
+            if os.path.exists(path):
+                return send_file(path, as_attachment=True, download_name=task_id + suffix)
 
     return jsonify({'error': 'Not ready'}), 404
+
+
+# --- Restore tools: model management + denoise/deblur, colorize, erase ---
+
+@app.route('/api/models/<key>', methods=['GET', 'POST'])
+def models_endpoint(key):
+    """GET: availability / download progress. POST: start download."""
+    if not model_store or not model_store.valid(key):
+        return jsonify({'error': 'Unknown model'}), 404
+    if request.method == 'POST':
+        model_store.start_download(key)
+    return jsonify(model_store.status(key))
+
+
+def _start_tool_thread(task_id, runner, *args):
+    task = tasks[task_id]
+    task['status'] = 'processing'
+    task['progress'] = 10
+    task['message'] = 'Starting...'
+    threading.Thread(target=runner, args=(task_id,) + args, daemon=True).start()
+    return jsonify({'status': 'processing'})
+
+
+def _finish_tool_task(task_id, output_path, suffix, size):
+    task = tasks[task_id]
+    task['status'] = 'completed'
+    task['progress'] = 100
+    task['output'] = output_path
+    task['name_suffix'] = suffix
+    task['message'] = 'Done!'
+    task['output_width'], task['output_height'] = size
+
+
+@app.route('/api/clean', methods=['POST'])
+def clean_start():
+    data = request.json or {}
+    task_id = data.get('task_id')
+    mode = data.get('mode', 'denoise')
+
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    if mode not in ('denoise', 'deblur'):
+        return jsonify({'error': 'Invalid mode'}), 400
+    if not (model_store and model_store.available(mode)):
+        return jsonify({'error': 'Model not installed'}), 400
+    return _start_tool_thread(task_id, _run_clean, mode)
+
+
+def _run_clean(task_id, mode):
+    task = tasks[task_id]
+    output_path = os.path.join(app.config['OUTPUT_FOLDER'], f'{task_id}_clean.png')
+    verb = 'Denoising' if mode == 'denoise' else 'Deblurring'
+
+    def on_tile(done, total):
+        if task.get('cancel_requested'):
+            raise TaskCancelled()
+        task['progress'] = min(95, 10 + int(done / total * 85))
+        task['message'] = f'{verb} tile {done}/{total}'
+
+    try:
+        task['message'] = f'{verb} on server...'
+        size = restore_engine.clean_image(mode, task['input'], output_path,
+                                          progress_cb=on_tile)
+        _finish_tool_task(task_id, output_path, '_clean', size)
+    except TaskCancelled:
+        task['status'] = 'cancelled'
+        task['message'] = 'Cancelled'
+    except Exception as e:
+        print(f'[clean] error: {e}', flush=True)
+        task['status'] = 'error'
+        task['message'] = f'{verb} error: {str(e)[:200]}'
+    save_task(task_id)
+
+
+@app.route('/api/restore', methods=['POST'])
+def restore_start():
+    data = request.json or {}
+    task_id = data.get('task_id')
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    colorize = bool(data.get('colorize'))
+    face = bool(data.get('face')) and FACE_RESTORE
+    enhance = bool(data.get('enhance')) and SERVER_AI
+    if colorize and not (model_store and model_store.available('colorize')):
+        return jsonify({'error': 'Colorization model not installed'}), 400
+    if not (colorize or face or enhance):
+        return jsonify({'error': 'Pick at least one restore option'}), 400
+    return _start_tool_thread(task_id, _run_restore, colorize, face, enhance)
+
+
+def _run_restore(task_id, colorize, face, enhance):
+    task = tasks[task_id]
+    output_path = os.path.join(app.config['OUTPUT_FOLDER'], f'{task_id}_restored.png')
+
+    def check_cancel():
+        if task.get('cancel_requested'):
+            raise TaskCancelled()
+
+    def on_progress(pct, msg):
+        check_cancel()
+        task['progress'] = pct
+        task['message'] = msg
+
+    try:
+        working = task['input']
+        # Stage 1: detail enhancement (Real-ESRGAN at original size),
+        # with GFPGAN folded in when faces are requested
+        if enhance:
+            def on_tile(done, total):
+                check_cancel()
+                task['progress'] = min(60, 10 + int(done / total * 50))
+                task['message'] = f'Enhancing detail (tile {done}/{total})'
+            ai_engine.enhance_image(working, output_path,
+                                    progress_cb=on_tile, face_restore=face)
+            working = output_path
+        elif face:
+            on_progress(25, 'Restoring faces...')
+            import cv2
+            import face_restore as fr
+            bgr = cv2.imread(working)
+            cv2.imwrite(output_path, fr.restore_faces(bgr))
+            working = output_path
+        # Stage 2: colorization (last — works on the cleaned luminance)
+        if colorize:
+            def on_col(pct, msg):
+                check_cancel()
+                task['progress'] = 65 + int(pct * 0.3)
+                task['message'] = msg
+            size = restore_engine.colorize_image(working, output_path,
+                                                progress_cb=on_col)
+        else:
+            if working != output_path:
+                shutil.copyfile(working, output_path)
+            from PIL import Image as _Image
+            with _Image.open(output_path) as im:
+                size = im.size
+        check_cancel()
+        _finish_tool_task(task_id, output_path, '_restored', size)
+    except TaskCancelled:
+        task['status'] = 'cancelled'
+        task['message'] = 'Cancelled'
+    except Exception as e:
+        print(f'[restore] error: {e}', flush=True)
+        task['status'] = 'error'
+        task['message'] = f'Restore error: {str(e)[:200]}'
+    save_task(task_id)
+
+
+@app.route('/api/erase', methods=['POST'])
+def erase_start():
+    """Object eraser: takes the current image and a white-on-black mask as
+    multipart files, returns a task to poll."""
+    if not (model_store and model_store.available('erase')):
+        return jsonify({'error': 'Eraser model not installed'}), 400
+    image = request.files.get('image')
+    mask = request.files.get('mask')
+    if not image or not mask:
+        return jsonify({'error': 'Image and mask required'}), 400
+
+    task_id = 'img_' + uuid.uuid4().hex[:12]
+    img_path = os.path.join(app.config['UPLOAD_FOLDER'], f'{task_id}_erase_src.png')
+    mask_path = os.path.join(app.config['UPLOAD_FOLDER'], f'{task_id}_mask.png')
+    image.save(img_path)
+    mask.save(mask_path)
+
+    tasks[task_id] = {
+        'status': 'uploaded', 'type': 'image', 'input': img_path,
+        'filename': image.filename or 'image.png',
+        'progress': 0, 'message': 'Ready',
+    }
+    _start_tool_thread(task_id, _run_erase, mask_path)
+    return jsonify({'task_id': task_id})
+
+
+def _run_erase(task_id, mask_path):
+    task = tasks[task_id]
+    output_path = os.path.join(app.config['OUTPUT_FOLDER'], f'{task_id}_erased.png')
+
+    def on_progress(pct, msg):
+        if task.get('cancel_requested'):
+            raise TaskCancelled()
+        task['progress'] = pct
+        task['message'] = msg
+
+    try:
+        size = restore_engine.inpaint_image(task['input'], mask_path,
+                                            output_path, progress_cb=on_progress)
+        _finish_tool_task(task_id, output_path, '_erased', size)
+    except TaskCancelled:
+        task['status'] = 'cancelled'
+        task['message'] = 'Cancelled'
+    except Exception as e:
+        print(f'[erase] error: {e}', flush=True)
+        task['status'] = 'error'
+        task['message'] = f'Erase error: {str(e)[:200]}'
+    save_task(task_id)
+
+
+# --- Background removal endpoints ---
+
+@app.route('/api/bg/model', methods=['GET', 'POST'])
+def bg_model():
+    """GET: model availability / download progress. POST: start download."""
+    if not bg_remove:
+        return jsonify({'error': 'Background removal module missing'}), 500
+    if request.method == 'POST':
+        bg_remove.start_download()
+    return jsonify(bg_remove.download_status())
+
+
+@app.route('/api/bg/remove', methods=['POST'])
+def bg_remove_start():
+    data = request.json or {}
+    task_id = data.get('task_id')
+    background = data.get('background', 'transparent')
+
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    if not (bg_remove and bg_remove.available()):
+        return jsonify({'error': 'Background removal model not installed'}), 400
+    if background != 'transparent' and not re.fullmatch(r'#[0-9a-fA-F]{6}', background):
+        return jsonify({'error': 'Invalid background color'}), 400
+
+    task['status'] = 'processing'
+    task['progress'] = 10
+    task['message'] = 'Starting background removal...'
+
+    thread = threading.Thread(target=_run_bg_remove,
+                              args=(task_id, background), daemon=True)
+    thread.start()
+    return jsonify({'status': 'processing'})
+
+
+def _run_bg_remove(task_id, background):
+    task = tasks[task_id]
+    output_path = os.path.join(app.config['OUTPUT_FOLDER'], f'{task_id}_nobg.png')
+
+    def on_progress(pct, msg):
+        if task.get('cancel_requested'):
+            raise TaskCancelled()
+        task['progress'] = pct
+        task['message'] = msg
+
+    # Inference is one opaque model call (~seconds to ~30s on old CPUs) —
+    # tick the bar forward so it doesn't look frozen mid-run.
+    done_evt = threading.Event()
+
+    def _tick():
+        while not done_evt.wait(1.0):
+            if task.get('status') == 'processing' and 30 <= task['progress'] < 80:
+                task['progress'] += 2
+
+    threading.Thread(target=_tick, daemon=True).start()
+    try:
+        out_w, out_h = bg_remove.remove_background(
+            task['input'], output_path, background=background,
+            progress_cb=on_progress)
+        if task.get('cancel_requested'):
+            raise TaskCancelled()
+        task['status'] = 'completed'
+        task['progress'] = 100
+        task['output'] = output_path
+        task['name_suffix'] = '_nobg'
+        task['message'] = 'Done!'
+        task['output_width'] = out_w
+        task['output_height'] = out_h
+    except TaskCancelled:
+        task['status'] = 'cancelled'
+        task['message'] = 'Cancelled'
+    except Exception as e:
+        print(f'[bg-remove] error: {e}', flush=True)
+        task['status'] = 'error'
+        task['message'] = f'Background removal error: {str(e)[:200]}'
+    finally:
+        done_evt.set()
+    save_task(task_id)
+
+
+# --- Batch zip: bundle finished results server-side (videos are far too
+# large to zip in browser memory) ---
+
+@app.route('/api/zip', methods=['POST'])
+def make_zip():
+    import zipfile
+    data = request.json or {}
+    task_ids = data.get('task_ids') or []
+    if not isinstance(task_ids, list) or not task_ids or len(task_ids) > 200:
+        return jsonify({'error': 'No tasks given'}), 400
+
+    entries = []
+    for tid in task_ids:
+        if not isinstance(tid, str) or not _safe_task_id(tid):
+            continue
+        src = _find_output(tid)
+        if not src:
+            continue
+        task = tasks.get(tid) or {}
+        stem = Path(task.get('filename') or tid).stem
+        entries.append((src, stem))
+    if not entries:
+        return jsonify({'error': 'No finished results found'}), 404
+
+    zip_id = 'zip_' + uuid.uuid4().hex[:12]
+    zip_path = os.path.join(app.config['OUTPUT_FOLDER'], zip_id + '.zip')
+    try:
+        used = set()
+        # Videos and PNGs are already compressed — store, don't re-compress
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
+            for src, stem in entries:
+                ext = Path(src).suffix
+                suffix = '_nobg' if src.endswith('_nobg.png') else \
+                    ('_4K' if ext == '.mp4' else '_upscaled')
+                name = f'{stem}{suffix}{ext}'
+                n = 1
+                while name in used:
+                    n += 1
+                    name = f'{stem}{suffix}_{n}{ext}'
+                used.add(name)
+                zf.write(src, name)
+    except OSError as e:
+        return jsonify({'error': f'Zip failed: {e}'}), 500
+
+    tasks[zip_id] = {'status': 'completed', 'output': zip_path,
+                     'filename': zip_id + '.zip', 'progress': 100,
+                     'message': 'Done!'}
+    save_task(zip_id)
+    return jsonify({'zip_id': zip_id, 'count': len(entries)})
+
+
+@app.route('/api/zip/<zip_id>')
+def zip_download(zip_id):
+    src = _find_output(zip_id)
+    if not src or not src.endswith('.zip'):
+        return jsonify({'error': 'Not ready'}), 404
+    return send_file(src, as_attachment=True, download_name='nextgenup_results.zip')
 
 
 # --- Helpers ---
