@@ -1055,7 +1055,55 @@
                         <div class="bars" id="master-bars-before"></div>
                         <div class="barlabels" id="master-barlabels-before"></div>
                         <p class="master-warn hidden" id="master-hot"></p>
-                        <p class="batch-sub mt">Settings are chosen from the analysis above &mdash; press Master Track.</p>
+                    </div>
+
+                    <div class="master-panel hidden" id="master-tuning">
+                        <div class="tuning-head">
+                            <h4>Tuning</h4>
+                            <span class="batch-sub">Starts at the values chosen from the analysis. Adjust, master again, and A/B each version.</span>
+                            <button class="new-video-btn tuning-reset" id="master-reset-tuning">Reset to auto</button>
+                        </div>
+                        <div class="tuning-grid">
+                            <label class="tune">
+                                <span class="tune-name">Tone target</span>
+                                <select id="tune-curve" class="batch-select">
+                                    <option value="neutral">Neutral</option>
+                                    <option value="bassFwd">Bass-forward</option>
+                                    <option value="acoustic">Open / acoustic</option>
+                                    <option value="warm">Warm</option>
+                                </select>
+                            </label>
+                            <label class="tune">
+                                <span class="tune-name">Tone correction <b id="tune-eq-val">60%</b></span>
+                                <input type="range" id="tune-eq" min="0" max="100" step="5" value="60">
+                                <span class="tune-hint">0% keeps your original balance</span>
+                            </label>
+                            <label class="tune">
+                                <span class="tune-name">Bass <b id="tune-bass-val">+0.6 dB</b></span>
+                                <input type="range" id="tune-bass" min="-4" max="4" step="0.5" value="0.6">
+                                <span class="tune-hint">low shelf at 70 Hz</span>
+                            </label>
+                            <label class="tune">
+                                <span class="tune-name">Treble / air <b id="tune-treble-val">+1.0 dB</b></span>
+                                <input type="range" id="tune-treble" min="-4" max="4" step="0.5" value="1">
+                                <span class="tune-hint">high shelf at 9 kHz &mdash; lower it if the result hisses</span>
+                            </label>
+                            <label class="tune">
+                                <span class="tune-name">De-hiss (de-ess) <b id="tune-deess-val">0.0 dB</b></span>
+                                <input type="range" id="tune-deess" min="0" max="8" step="0.5" value="0">
+                                <span class="tune-hint">tames sharp "s" and hiss around 5&ndash;9 kHz</span>
+                            </label>
+                            <label class="tune">
+                                <span class="tune-name">Loudness target <b id="tune-lufs-val">-14 LUFS</b></span>
+                                <input type="range" id="tune-lufs" min="-18" max="-8" step="1" value="-14">
+                                <span class="tune-hint">-16 Apple Music &middot; -14 Spotify / YouTube &middot; -10 club-loud</span>
+                            </label>
+                            <label class="tune">
+                                <span class="tune-name">Stereo width <b id="tune-width-val">&times;1.15</b></span>
+                                <input type="range" id="tune-width" min="1" max="1.5" step="0.05" value="1.15">
+                                <span class="tune-hint">&times;1.00 leaves the stereo image untouched</span>
+                            </label>
+                        </div>
                     </div>
 
                     <div id="master-progress-section" class="progress-section hidden">

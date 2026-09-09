@@ -421,9 +421,10 @@
     const BAND_LABELS = ['20', '60', '150', '400', '1k', '2.5k', '6k', '12k'];
     const master = {
         file: null, worker: null, nextId: 1, audio: null, analysis: null,
-        result: null, resultBlob: null, processing: false,
+        autoPlan: null, result: null, resultBlob: null, processing: false,
         player: null, raf: 0, envA: null, envB: null,
     };
+    const CURVE_KEYS = { 'neutral': 'neutral', 'bass-forward': 'bassFwd', 'open / acoustic': 'acoustic', 'warm': 'warm' };
 
     function masterWorker() {
         if (!master.worker) master.worker = new Worker('/static/js/vendor/remaster-worker.js');
@@ -497,6 +498,48 @@
             masterPaint();
         });
         window.addEventListener('resize', () => { master.envA = null; if (master.result) masterPaint(); });
+
+        // Tuning controls: live value labels + reset
+        const fmtDb = (v) => `${v >= 0 ? '+' : ''}${Number(v).toFixed(1)} dB`;
+        const bind = (id, labelId, fmt) => {
+            const el = $(id);
+            el.addEventListener('input', () => { $(labelId).textContent = fmt(el.value); });
+        };
+        bind('#tune-eq', '#tune-eq-val', (v) => `${v}%`);
+        bind('#tune-bass', '#tune-bass-val', fmtDb);
+        bind('#tune-treble', '#tune-treble-val', fmtDb);
+        bind('#tune-deess', '#tune-deess-val', (v) => `${Number(v).toFixed(1)} dB`);
+        bind('#tune-width', '#tune-width-val', (v) => `\u00d7${Number(v).toFixed(2)}`);
+        bind('#tune-lufs', '#tune-lufs-val', (v) => `${v} LUFS`);
+        $('#master-reset-tuning').addEventListener('click', () => {
+            if (master.autoPlan) masterSeedTuning(master.autoPlan);
+        });
+    }
+
+    function masterSeedTuning(plan) {
+        const set = (id, labelId, value, fmt) => {
+            $(id).value = value;
+            if (labelId) $(labelId).textContent = fmt(value);
+        };
+        $('#tune-curve').value = CURVE_KEYS[plan.curveName] || 'neutral';
+        set('#tune-eq', '#tune-eq-val', Math.round(plan.eqStrength * 100), (v) => `${v}%`);
+        set('#tune-bass', '#tune-bass-val', plan.lowShelf.db, (v) => `${v >= 0 ? '+' : ''}${Number(v).toFixed(1)} dB`);
+        set('#tune-treble', '#tune-treble-val', plan.highShelf.db, (v) => `${v >= 0 ? '+' : ''}${Number(v).toFixed(1)} dB`);
+        set('#tune-deess', '#tune-deess-val', Math.round(plan.deEss * 2) / 2, (v) => `${Number(v).toFixed(1)} dB`);
+        set('#tune-lufs', '#tune-lufs-val', Math.round(plan.targetLufs), (v) => `${v} LUFS`);
+        set('#tune-width', '#tune-width-val', Math.round(plan.width * 20) / 20, (v) => `\u00d7${Number(v).toFixed(2)}`);
+    }
+
+    function masterOverrides() {
+        return {
+            curveKey: $('#tune-curve').value,
+            eqStrength: parseFloat($('#tune-eq').value) / 100,
+            bassDb: parseFloat($('#tune-bass').value),
+            trebleDb: parseFloat($('#tune-treble').value),
+            deEss: parseFloat($('#tune-deess').value),
+            targetLufs: parseInt($('#tune-lufs').value),
+            width: parseFloat($('#tune-width').value),
+        };
     }
 
     async function masterLoad(file) {
@@ -512,6 +555,7 @@
         $('#master-new-row').classList.remove('hidden');
         $('#master-results').classList.add('hidden');
         $('#master-measured').classList.add('hidden');
+        $('#master-tuning').classList.add('hidden');
         $('#master-start-btn').disabled = true;
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -524,6 +568,10 @@
             const analysed = await workerCall('analyse', { audio: master.audio });
             master.analysis = analysed.analysis;
             masterRenderMeasured(master.analysis);
+            const planned = await workerCall('plan', { analysis: master.analysis });
+            master.autoPlan = planned.plan;
+            masterSeedTuning(master.autoPlan);
+            $('#master-tuning').classList.remove('hidden');
             $('#master-file-info').textContent =
                 `${fmtSize(file.size)} • ${mmss(buf.duration)} • ${buf.sampleRate} Hz • runs in this window, nothing is uploaded`;
             $('#master-start-btn').disabled = false;
@@ -567,7 +615,7 @@
         $('#master-results').classList.add('hidden');
         try {
             masterProgress(3, 'Starting...');
-            const m = await workerCall('master', { audio: master.audio, analysis: master.analysis },
+            const m = await workerCall('master', { audio: master.audio, analysis: master.analysis, overrides: masterOverrides() },
                 (stage, fraction) => masterProgress(Math.round(3 + fraction * 95), stage));
             master.result = m;
             const wav = window.RemasterLib.encodeWav24(m.result.audio);
@@ -692,6 +740,7 @@
         $('#master-new-row').classList.add('hidden');
         $('#master-results').classList.add('hidden');
         $('#master-measured').classList.add('hidden');
+        $('#master-tuning').classList.add('hidden');
         $('#master-upload-section').classList.remove('hidden');
         $('#master-file-input').value = '';
     }

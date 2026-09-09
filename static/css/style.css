@@ -1494,3 +1494,14 @@ footer {
 .tag-map .keep { background: var(--green); }
 
 .vtools-hint { font-size: 13px; color: var(--text-muted); padding: 9px 0; display: block; }
+
+/* === Mastering tuning === */
+.tuning-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+.tuning-head h4 { margin: 0; }
+.tuning-reset { margin-left: auto; padding: 7px 14px; font-size: 12px; }
+.tuning-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px 22px; }
+.tune { display: flex; flex-direction: column; gap: 6px; }
+.tune-name { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); display: flex; justify-content: space-between; }
+.tune-name b { color: var(--teal); font-variant-numeric: tabular-nums; }
+.tune input[type=range] { accent-color: var(--accent); width: 100%; }
+.tune-hint { font-size: 11px; color: var(--text-dim); }
