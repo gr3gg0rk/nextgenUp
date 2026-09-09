@@ -43,6 +43,18 @@ MODELS = {
         'files': [(f'{HF}/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx',
                    'lama.onnx', 207971136)],
     },
+    'separate': {
+        'label': 'MDX-Net vocal separation (Kim Vocal 2)',
+        'files': [(f'{HF}/seanghay/uvr_models/resolve/main/Kim_Vocal_2.onnx',
+                   'kim_vocal_2.onnx', 66759214)],
+    },
+    'denoise_speech': {
+        'label': 'DeepFilterNet3 noise removal',
+        'files': [(f'{HF}/soniqo/DeepFilterNet3-ONNX/resolve/main/deepfilter.onnx',
+                   'deepfilter3.onnx', 8608859),
+                  (f'{HF}/soniqo/DeepFilterNet3-ONNX/resolve/main/deepfilter-auxiliary.bin',
+                   'deepfilter3-auxiliary.bin', 126976)],
+    },
 }
 
 _lock = threading.Lock()

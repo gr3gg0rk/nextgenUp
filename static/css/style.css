@@ -1327,3 +1327,108 @@ footer {
     gap: 18px;
     flex-wrap: wrap;
 }
+
+/* === Audio tools === */
+.audio-file-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 18px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+}
+
+.audio-file-card h3 {
+    font-size: 16px;
+    overflow-wrap: anywhere;
+}
+
+.audio-result-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 14px 18px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 10px;
+}
+
+.audio-result-label {
+    min-width: 100px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.audio-result-row audio {
+    flex: 1;
+    min-width: 220px;
+    height: 40px;
+}
+
+.audio-save-btn { padding: 9px 18px; }
+
+.master-why {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin: 16px 0;
+}
+
+.master-why h4 {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+.master-why li {
+    margin: 6px 0 6px 18px;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.tags-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+}
+
+.tags-panel h4 {
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+.tags-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.tags-table td {
+    padding: 6px 10px;
+    border-top: 1px solid var(--border);
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.tags-table td:first-child {
+    color: var(--text-muted);
+    white-space: nowrap;
+    width: 180px;
+}

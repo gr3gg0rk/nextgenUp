@@ -47,6 +47,12 @@ except Exception as e:
     model_store = None
     restore_engine = None
 
+try:
+    import audio_engine
+except Exception as e:
+    print(f'[startup] audio tools unavailable: {e}', flush=True)
+    audio_engine = None
+
 def _find_bin(name):
     """Find a binary next to the packaged executable, in PATH, or in
     common install locations."""
@@ -281,7 +287,7 @@ def _find_output(task_id):
     if _safe_task_id(task_id):
         for suffix in ('_basic_4k.mp4', '_pro_4k.mp4', '_upscaled.png',
                        '_nobg.png', '_clean.png', '_restored.png',
-                       '_erased.png', '.zip'):
+                       '_erased.png', '.zip', '.wav', '_denoised.wav'):
             p = os.path.join(app.config['OUTPUT_FOLDER'], task_id + suffix)
             if os.path.exists(p):
                 return p
@@ -956,6 +962,146 @@ def _run_bg_remove(task_id, background):
     save_task(task_id)
 
 
+# --- Audio tools: vocal separation + noise removal ---
+
+AUDIO_EXTS = {'.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.opus',
+              '.wma', '.aiff', '.aif', '.mp4', '.webm'}
+
+
+@app.route('/api/audio/upload', methods=['POST'])
+def audio_upload():
+    if not audio_engine:
+        return jsonify({'error': 'Audio tools unavailable'}), 500
+    file = request.files.get('audio')
+    if not file or not file.filename:
+        return jsonify({'error': 'No audio file provided'}), 400
+    ext = Path(file.filename).suffix.lower()
+    if ext not in AUDIO_EXTS:
+        return jsonify({'error': f'Unsupported format: {ext}'}), 400
+
+    task_id = 'aud_' + uuid.uuid4().hex[:12]
+    safe_name = re.sub(r'[^\w.\-]', '_', file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], f'{task_id}_{safe_name}')
+    file.save(filepath)
+
+    duration = audio_engine.probe_duration(filepath)
+    if not duration:
+        os.remove(filepath)
+        return jsonify({'error': 'Could not read audio file'}), 400
+
+    tasks[task_id] = {
+        'status': 'uploaded', 'type': 'audio', 'input': filepath,
+        'filename': file.filename, 'duration': round(duration, 1),
+        'progress': 0, 'message': 'Ready',
+    }
+    save_task(task_id)
+    return jsonify({'task_id': task_id, 'duration': round(duration, 1)})
+
+
+@app.route('/api/audio/separate', methods=['POST'])
+def audio_separate():
+    task_id = (request.json or {}).get('task_id')
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    if not (model_store and model_store.available('separate')):
+        return jsonify({'error': 'Separation model not installed'}), 400
+    return _start_tool_thread(task_id, _run_separate)
+
+
+def _run_separate(task_id):
+    task = tasks[task_id]
+    stem = Path(task['filename']).stem
+    voc_id, ins_id = task_id + '_voc', task_id + '_ins'
+    voc_path = os.path.join(app.config['OUTPUT_FOLDER'], f'{voc_id}.wav')
+    ins_path = os.path.join(app.config['OUTPUT_FOLDER'], f'{ins_id}.wav')
+
+    def on_seg(done, total):
+        if task.get('cancel_requested'):
+            raise TaskCancelled()
+        task['progress'] = min(95, 5 + int(done / total * 90))
+        task['message'] = f'Separating segment {done}/{total}'
+
+    try:
+        task['message'] = 'Loading audio...'
+        audio_engine.separate(task['input'], voc_path, ins_path,
+                              progress_cb=on_seg)
+        # Child task entries so download/save/zip machinery works per stem
+        for cid, path, name in ((voc_id, voc_path, f'{stem}_vocals.wav'),
+                                (ins_id, ins_path, f'{stem}_instrumental.wav')):
+            tasks[cid] = {'status': 'completed', 'output': path,
+                          'filename': name, 'progress': 100, 'message': 'Done!'}
+            save_task(cid)
+        task['status'] = 'completed'
+        task['progress'] = 100
+        task['message'] = 'Done!'
+        task['stems'] = {'vocals': voc_id, 'instrumental': ins_id}
+    except TaskCancelled:
+        task['status'] = 'cancelled'
+        task['message'] = 'Cancelled'
+    except Exception as e:
+        print(f'[separate] error: {e}', flush=True)
+        task['status'] = 'error'
+        task['message'] = f'Separation error: {str(e)[:200]}'
+    save_task(task_id)
+
+
+@app.route('/api/audio/denoise', methods=['POST'])
+def audio_denoise():
+    task_id = (request.json or {}).get('task_id')
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    if not (model_store and model_store.available('denoise_speech')):
+        return jsonify({'error': 'Denoise model not installed'}), 400
+    return _start_tool_thread(task_id, _run_audio_denoise)
+
+
+def _run_audio_denoise(task_id):
+    task = tasks[task_id]
+    out_path = os.path.join(app.config['OUTPUT_FOLDER'], f'{task_id}_denoised.wav')
+
+    def on_chunk(done, total):
+        if task.get('cancel_requested'):
+            raise TaskCancelled()
+        task['progress'] = min(95, 5 + int(done / total * 90))
+        task['message'] = f'Removing noise ({done}/{total})'
+
+    try:
+        task['message'] = 'Loading audio...'
+        audio_engine.denoise(task['input'], out_path, progress_cb=on_chunk)
+        task['status'] = 'completed'
+        task['progress'] = 100
+        task['output'] = out_path
+        task['message'] = 'Done!'
+    except TaskCancelled:
+        task['status'] = 'cancelled'
+        task['message'] = 'Cancelled'
+    except Exception as e:
+        print(f'[denoise-audio] error: {e}', flush=True)
+        task['status'] = 'error'
+        task['message'] = f'Denoise error: {str(e)[:200]}'
+    save_task(task_id)
+
+
+@app.route('/api/audio/download/<task_id>')
+def audio_download(task_id):
+    task = tasks.get(task_id)
+    if task and task.get('status') == 'completed' and task.get('output') \
+            and os.path.exists(task['output']):
+        stem = Path(task['filename']).stem
+        name = task['filename'] if task['filename'].endswith('.wav') \
+            else f'{stem}_denoised.wav'
+        return send_file(task['output'], as_attachment=True, download_name=name)
+    if _safe_task_id(task_id):
+        for suffix in ('.wav', '_denoised.wav'):
+            p = os.path.join(app.config['OUTPUT_FOLDER'], task_id + suffix)
+            if os.path.exists(p):
+                return send_file(p, as_attachment=True,
+                                 download_name=task_id + suffix)
+    return jsonify({'error': 'Not ready'}), 404
+
+
 # --- Batch zip: bundle finished results server-side (videos are far too
 # large to zip in browser memory) ---
 
@@ -975,8 +1121,7 @@ def make_zip():
         if not src:
             continue
         task = tasks.get(tid) or {}
-        stem = Path(task.get('filename') or tid).stem
-        entries.append((src, stem))
+        entries.append((src, task.get('filename') or '', Path(task.get('filename') or tid).stem))
     if not entries:
         return jsonify({'error': 'No finished results found'}), 404
 
@@ -986,15 +1131,22 @@ def make_zip():
         used = set()
         # Videos and PNGs are already compressed — store, don't re-compress
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
-            for src, stem in entries:
+            for src, orig_name, stem in entries:
                 ext = Path(src).suffix
-                suffix = '_nobg' if src.endswith('_nobg.png') else \
-                    ('_4K' if ext == '.mp4' else '_upscaled')
-                name = f'{stem}{suffix}{ext}'
+                if ext == '.wav':
+                    # Audio results: the task filename is already the final
+                    # name for stems; denoised outputs get their own suffix
+                    name = orig_name if orig_name.endswith('.wav') \
+                        else f'{stem}_denoised.wav'
+                else:
+                    suffix = '_nobg' if src.endswith('_nobg.png') else \
+                        ('_4K' if ext == '.mp4' else '_upscaled')
+                    name = f'{stem}{suffix}{ext}'
+                base = Path(name).stem
                 n = 1
                 while name in used:
                     n += 1
-                    name = f'{stem}{suffix}_{n}{ext}'
+                    name = f'{base}_{n}{ext}'
                 used.add(name)
                 zf.write(src, name)
     except OSError as e:
