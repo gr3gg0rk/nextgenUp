@@ -19,7 +19,7 @@ def _ffmpeg():
 
 
 def _run(cmd, timeout=None):
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=timeout)
     if r.returncode != 0:
         lines = [l for l in r.stderr.strip().splitlines() if l.strip()]
         raise RuntimeError(lines[-1][:200] if lines else 'ffmpeg failed')
@@ -32,7 +32,7 @@ def _run_with_progress(cmd, duration, progress_cb, base, span):
     cmd = cmd[:-1] + ['-progress', 'pipe:1', cmd[-1]]
     proc = subprocess.Popen(cmd,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True)
+                            text=True, encoding='utf-8', errors='replace')
     stderr_chunks = []
     import threading
     t = threading.Thread(target=lambda: stderr_chunks.extend(proc.stderr),
@@ -56,7 +56,7 @@ def _run_with_progress(cmd, duration, progress_cb, base, span):
 
 def _has_audio(in_path):
     r = subprocess.run([_ffmpeg(), '-hide_banner', '-i', in_path],
-                       capture_output=True, text=True, timeout=30)
+                       capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30)
     return 'Audio:' in r.stderr
 
 

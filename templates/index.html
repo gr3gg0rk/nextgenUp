@@ -916,6 +916,10 @@
 
                     <div id="sep-results" class="hidden">
                         <div class="audio-result-row">
+                            <div class="audio-result-label">Original</div>
+                            <audio id="sep-original-audio" controls preload="none"></audio>
+                        </div>
+                        <div class="audio-result-row">
                             <div class="audio-result-label">Vocals</div>
                             <audio id="sep-vocals-audio" controls preload="none"></audio>
                             <button class="download-btn audio-save-btn" id="sep-vocals-save">Save</button>
@@ -1036,12 +1040,22 @@
                             <h3 id="master-file-name">track.wav</h3>
                             <p class="batch-sub" id="master-file-info"></p>
                         </div>
-                        <button class="upscale-btn" id="master-start-btn">
+                        <button class="upscale-btn" id="master-start-btn" disabled>
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polygon points="5 3 19 12 5 21 5 3"/>
                             </svg>
                             Master Track
                         </button>
+                    </div>
+
+                    <div class="master-panel hidden" id="master-measured">
+                        <h4>Measured</h4>
+                        <table class="kv-table" id="master-measured-table"></table>
+                        <h4 class="mt">Spectral balance</h4>
+                        <div class="bars" id="master-bars-before"></div>
+                        <div class="barlabels" id="master-barlabels-before"></div>
+                        <p class="master-warn hidden" id="master-hot"></p>
+                        <p class="batch-sub mt">Settings are chosen from the analysis above &mdash; press Master Track.</p>
                     </div>
 
                     <div id="master-progress-section" class="progress-section hidden">
@@ -1053,20 +1067,29 @@
                     </div>
 
                     <div id="master-results" class="hidden">
-                        <div class="info-bar">
-                            <div class="info-item"><span class="info-label">Loudness</span><span class="info-value" id="master-stat-lufs">-</span></div>
-                            <div class="info-item"><span class="info-label">True Peak</span><span class="info-value" id="master-stat-peak">-</span></div>
-                            <div class="info-item"><span class="info-label">Dynamics (LRA)</span><span class="info-value" id="master-stat-lra">-</span></div>
-                            <div class="info-item"><span class="info-label">Target</span><span class="info-value" id="master-stat-target">-</span></div>
-                        </div>
-                        <div class="master-why">
-                            <h4>What it heard and decided</h4>
-                            <ul id="master-why-list"></ul>
-                        </div>
-                        <div class="audio-result-row">
-                            <div class="audio-result-label">Mastered</div>
-                            <audio id="master-audio" controls preload="none"></audio>
-                            <button class="download-btn audio-save-btn" id="master-save">Save WAV</button>
+                        <div class="master-panel">
+                            <h4>What it heard, and what it decided</h4>
+                            <div class="reasons" id="master-why-list"></div>
+                            <table class="kv-table" id="master-plan-table"></table>
+                            <h4 class="mt">Before vs after</h4>
+                            <table class="kv-table" id="master-delta-table"></table>
+                            <h4 class="mt">Spectral balance after</h4>
+                            <div class="bars" id="master-bars-after"></div>
+                            <div class="barlabels" id="master-barlabels-after"></div>
+                            <canvas id="master-wave" class="master-wave"></canvas>
+                            <div class="transport">
+                                <button class="upscale-btn transport-btn" id="master-play">Play</button>
+                                <div class="ab">
+                                    <button id="master-ab-a">A &middot; Original</button>
+                                    <button id="master-ab-b" class="on">B &middot; Mastered</button>
+                                </div>
+                                <label class="face-toggle"><input type="checkbox" id="master-matched" checked> loudness-matched</label>
+                                <span class="master-time" id="master-time">0:00 / 0:00</span>
+                            </div>
+                            <p class="master-note" id="master-note"></p>
+                            <div class="master-actions">
+                                <button class="download-btn" id="master-save">Download 24-bit WAV</button>
+                            </div>
                         </div>
                     </div>
 
@@ -1108,31 +1131,43 @@
                         </div>
                         <button class="upscale-btn" id="tags-clean-btn">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                            Strip All Tags
+                            Process File
                         </button>
                     </div>
 
-                    <div class="tags-panel">
-                        <h4>Tags in this file</h4>
+                    <div class="master-panel">
+                        <h4>What to write back</h4>
+                        <div class="tag-modes">
+                            <label class="face-toggle"><input type="radio" name="tags-mode" value="strip" checked> Remove every tag</label>
+                            <label class="face-toggle"><input type="radio" name="tags-mode" value="write"> Replace with my own tags</label>
+                        </div>
+                        <div class="tag-fields hidden" id="tags-fields">
+                            <label>Title<input type="text" data-tagfield="title"></label>
+                            <label>Artist<input type="text" data-tagfield="artist"></label>
+                            <label>Album<input type="text" data-tagfield="album"></label>
+                            <label>Year<input type="text" data-tagfield="year"></label>
+                            <label>Genre<input type="text" data-tagfield="genre"></label>
+                            <label>Track<input type="text" data-tagfield="track"></label>
+                            <label class="tag-field-wide">Comment<input type="text" data-tagfield="comment"></label>
+                        </div>
+                    </div>
+
+                    <div class="master-panel">
+                        <h4 id="tags-before-title">Tags in this file</h4>
                         <table class="tags-table" id="tags-before-table"></table>
                     </div>
 
                     <div id="tags-results" class="hidden">
-                        <div id="tags-download-section" class="download-section">
-                            <div class="download-card">
-                                <div class="download-info">
-                                    <h3 id="tags-result-title">Tags Removed!</h3>
-                                    <p id="tags-result-details"></p>
-                                </div>
-                                <button class="download-btn" id="tags-save">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                                        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                                    </svg>
-                                    Download Clean File
-                                </button>
+                        <div class="master-panel">
+                            <h4>Result</h4>
+                            <div class="tag-map" id="tags-map"></div>
+                            <table class="kv-table" id="tags-result-table"></table>
+                            <h4 class="mt" id="tags-after-title">Tags after</h4>
+                            <table class="tags-table" id="tags-after-table"></table>
+                            <div class="master-actions">
+                                <button class="download-btn" id="tags-save">Download Clean File</button>
                             </div>
                         </div>
                     </div>
@@ -1502,7 +1537,7 @@
                         </div>
                     </div>
 
-                    <div class="options-row">
+                    <div class="options-row vtools-tools">
                         <div class="option-group">
                             <label>Tool</label>
                             <div class="scale-buttons" id="vtools-mode-buttons">
@@ -1513,6 +1548,8 @@
                                 <button class="scale-btn" data-vtool="gif">Make GIF</button>
                             </div>
                         </div>
+                    </div>
+                    <div class="options-row">
                         <div class="option-group hidden" id="vtools-compress-opts">
                             <label>Target Size</label>
                             <select id="vtools-target-mb" class="batch-select">
@@ -1540,7 +1577,7 @@
                         </div>
                         <div class="option-group">
                             <label>About</label>
-                            <span class="output-res" id="vtools-hint">AI removes background noise from the audio track</span>
+                            <span class="vtools-hint" id="vtools-hint">AI removes background noise from the audio track</span>
                         </div>
                         <button class="upscale-btn" id="vtools-start-btn">Run</button>
                     </div>

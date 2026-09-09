@@ -50,10 +50,13 @@ MODELS = {
     },
     'denoise_speech': {
         'label': 'DeepFilterNet3 noise removal',
-        'files': [(f'{HF}/soniqo/DeepFilterNet3-ONNX/resolve/main/deepfilter.onnx',
-                   'deepfilter3.onnx', 8608859),
-                  (f'{HF}/soniqo/DeepFilterNet3-ONNX/resolve/main/deepfilter-auxiliary.bin',
-                   'deepfilter3-auxiliary.bin', 126976)],
+        # Official export from the DeepFilterNet repo (MIT): a tarball with
+        # the encoder + two decoders, unpacked to the names in 'extract'
+        'files': [('https://github.com/Rikorose/DeepFilterNet/raw/v0.5.6/models/DeepFilterNet3_onnx.tar.gz',
+                   'DeepFilterNet3_onnx.tar.gz', 7983136)],
+        'extract': {'tmp/export/enc.onnx': 'dfn3_enc.onnx',
+                    'tmp/export/erb_dec.onnx': 'dfn3_erb_dec.onnx',
+                    'tmp/export/df_dec.onnx': 'dfn3_df_dec.onnx'},
     },
 }
 
@@ -72,8 +75,27 @@ def model_path(key, index=0):
     return paths.find_model(name)
 
 
+def _required_names(key):
+    spec = MODELS[key]
+    if 'extract' in spec:
+        return list(spec['extract'].values())
+    return [f[1] for f in spec['files']]
+
+
 def available(key):
-    return all(paths.find_model(f[1]) is not None for f in MODELS[key]['files'])
+    return all(paths.find_model(n) is not None for n in _required_names(key))
+
+
+def _extract(archive, dest_dir, members):
+    """Pull named members out of a .tar.gz into dest_dir under new names."""
+    import tarfile
+    with tarfile.open(archive, 'r:gz') as tf:
+        for member, out_name in members.items():
+            src = tf.extractfile(member)
+            if src is None:
+                raise OSError(f'{member} missing from archive')
+            with open(os.path.join(dest_dir, out_name), 'wb') as f:
+                f.write(src.read())
 
 
 def total_size(key):
@@ -135,6 +157,10 @@ def _download(key):
                 raise OSError(f'Download of {name} incomplete')
             os.replace(part, dest)
             done_before += approx
+        if 'extract' in MODELS[key]:
+            archive = os.path.join(dest_dir, MODELS[key]['files'][0][1])
+            _extract(archive, dest_dir, MODELS[key]['extract'])
+            os.remove(archive)
         with _lock:
             _state[key].update(status='done', progress=100)
         print(f'[models] {key} downloaded to {dest_dir}', flush=True)

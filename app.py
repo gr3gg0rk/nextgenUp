@@ -350,7 +350,7 @@ def diagnostics():
     enc = _detect_encoder()
     try:
         ffv = subprocess.run([FFMPEG, '-version'], capture_output=True,
-                             text=True, timeout=8).stdout.splitlines()[0]
+                             text=True, encoding='utf-8', errors='replace', timeout=8).stdout.splitlines()[0]
     except Exception as e:
         ffv = f'unavailable: {e}'
     return jsonify({
@@ -1346,7 +1346,7 @@ def _detect_encoder():
     for 4K output, which matters for long videos."""
     try:
         result = subprocess.run(
-            [FFMPEG, '-encoders'], capture_output=True, text=True, timeout=10
+            [FFMPEG, '-encoders'], capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10
         )
         encoders = result.stdout
         if sys.platform == 'darwin' and 'h264_videotoolbox' in encoders:
@@ -1376,7 +1376,7 @@ def _video_info_via_ffmpeg(filepath):
     """Fallback: parse `ffmpeg -i` stderr when ffprobe is unavailable."""
     try:
         result = subprocess.run([FFMPEG, '-hide_banner', '-i', filepath],
-                                capture_output=True, text=True, timeout=20)
+                                capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=20)
         err = result.stderr
 
         video_line = next((l for l in err.splitlines() if 'Video:' in l), None)
@@ -1417,7 +1417,7 @@ def _video_info_via_ffprobe(filepath):
             FFPROBE, '-v', 'quiet', '-print_format', 'json',
             '-show_format', '-show_streams', filepath
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30)
         data = json.loads(result.stdout)
 
         video_stream = next(
@@ -1456,7 +1456,7 @@ def get_image_info(filepath):
     except Exception:
         try:
             cmd = [FFMPEG, '-i', filepath, '-f', 'null', '-']
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=15)
             match = re.search(r'(\d{2,5})x(\d{2,5})', result.stderr)
             if match:
                 width, height = int(match.group(1)), int(match.group(2))
@@ -1514,7 +1514,7 @@ def _run_image_upscale(task_id, scale):
 
         print(f"[image-upscale] Running: {' '.join(cmd)}", flush=True)
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, text=True)
+                                   stderr=subprocess.PIPE, text=True, encoding='utf-8', errors='replace')
         _procs[task_id] = process
         try:
             _, stderr_out = process.communicate(timeout=120)
@@ -1640,7 +1640,7 @@ def _run_basic_upscale(task_id, scale):
         print(f"[upscale] Running: {' '.join(cmd)}", flush=True)
 
         process = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, encoding='utf-8', errors='replace'
         )
         _procs[task_id] = process
 
@@ -1720,7 +1720,7 @@ def _run_pro_assemble(task_id, fps):
     ]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=300)
 
         if result.returncode == 0 and os.path.exists(output_path):
             task['status'] = 'completed'
