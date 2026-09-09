@@ -25,6 +25,7 @@
     };
 
     const $ = (sel) => document.querySelector(sel);
+    const NGU_TOKEN = document.querySelector('meta[name="ngu-token"]')?.content || '';
     const setupSection = $('#bg-setup-section');
     const uploadSection = $('#bg-upload-section');
     const appSection = $('#bg-app-section');
@@ -507,7 +508,7 @@
                 if (!path) return;
                 const res = await fetch('/api/save', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-NGU-Token': NGU_TOKEN },
                     body: JSON.stringify({ task_id: taskId, path }),
                 });
                 const data = await res.json();

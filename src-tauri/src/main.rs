@@ -104,6 +104,9 @@ fn main() {
                 let mut cmd = Command::new(&server);
                 cmd.env("PORT", SERVER_PORT.to_string())
                     .env("NEXTGENUP_DATA", &data_dir)
+                    // The desktop backend must never listen on the network;
+                    // LAN serving is a web-mode (run-from-source) feature.
+                    .env("NEXTGENUP_HOST", "127.0.0.1")
                     .current_dir(&data_dir);
                 #[cfg(unix)]
                 {

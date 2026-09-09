@@ -4,6 +4,7 @@
 import json
 import os
 import re
+import secrets
 import shutil
 import sqlite3
 import subprocess
@@ -12,6 +13,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlparse
 
 from flask import Flask, Response, jsonify, render_template, request, send_file
 
@@ -90,6 +92,12 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2GB
 tasks = {}
 # Live subprocess handles per task, so cancel can kill them (not persisted)
 _procs = {}
+
+# Per-session token for file-writing endpoints. It is embedded in the page,
+# so only same-origin scripts can read it, and it travels in a custom header,
+# which forces a CORS preflight — a cross-origin page (e.g. a malicious
+# website poking at localhost) can neither obtain nor send it.
+API_TOKEN = secrets.token_hex(32)
 
 
 class TaskCancelled(Exception):
@@ -197,7 +205,8 @@ def _cleanup_loop():
 def index():
     model_exists = paths.find_model('realesr-general-x4v3.onnx') is not None
     return render_template('index.html', model_available=model_exists,
-                           server_ai=SERVER_AI, face_restore=FACE_RESTORE)
+                           server_ai=SERVER_AI, face_restore=FACE_RESTORE,
+                           api_token=API_TOKEN)
 
 
 @app.route('/llms.txt')
@@ -222,22 +231,46 @@ OPEN_ALLOWED = {'matily.org', 'www.matily.org', 'github.com'}
 
 @app.route('/api/open', methods=['POST'])
 def open_external():
-    from urllib.parse import urlparse
     import webbrowser
     url = (request.json or {}).get('url', '')
     parsed = urlparse(url)
     if parsed.scheme != 'https' or parsed.hostname not in OPEN_ALLOWED:
         return jsonify({'error': 'URL not allowed'}), 400
-    # Only honor requests from this machine — remote LAN users have a real
+    # Local connection + session token; remote LAN users have a real
     # browser and don't need (or want) links opening on the server.
-    if request.remote_addr not in ('127.0.0.1', '::1'):
-        return jsonify({'error': 'Local requests only'}), 403
+    if not _write_authorized():
+        return jsonify({'error': 'Not authorized'}), 403
     webbrowser.open(url)
     return jsonify({'status': 'ok'})
 
 
 def _local_only():
     return request.remote_addr in ('127.0.0.1', '::1')
+
+
+def _origin_ok(origin):
+    """Accept only our own page (any localhost origin) or the Tauri webview."""
+    if origin in ('tauri://localhost', 'https://tauri.localhost',
+                  'http://tauri.localhost'):
+        return True
+    parsed = urlparse(origin)
+    return parsed.scheme in ('http', 'https') and \
+        parsed.hostname in ('127.0.0.1', 'localhost', '::1')
+
+
+def _write_authorized():
+    """Guard for endpoints that write to user-chosen paths or open URLs:
+    local connection + the page's session token + a sane Origin. A localhost
+    connection alone is not proof the USER asked — a malicious website could
+    fire cross-origin requests at 127.0.0.1 (GitHub issue #2)."""
+    if not _local_only():
+        return False
+    if request.headers.get('X-NGU-Token') != API_TOKEN:
+        return False
+    origin = request.headers.get('Origin')
+    if origin and not _origin_ok(origin):
+        return False
+    return True
 
 
 def _find_output(task_id):
@@ -259,9 +292,9 @@ def _find_output(task_id):
 def save_to_path():
     """Copy a finished result to a user-chosen absolute path. Used by the
     desktop app after its native Save dialog (the webview has no download
-    manager). Local requests only."""
-    if not _local_only():
-        return jsonify({'error': 'Local requests only'}), 403
+    manager). Local requests with the session token only."""
+    if not _write_authorized():
+        return jsonify({'error': 'Not authorized'}), 403
     data = request.json or {}
     task_id = data.get('task_id', '')
     dest = data.get('path', '')
@@ -280,9 +313,10 @@ def save_to_path():
 @app.route('/api/save-blob', methods=['POST'])
 def save_blob():
     """Write posted bytes (browser-side results: Quick/Enhance images,
-    batch zips) to a user-chosen absolute path. Local requests only."""
-    if not _local_only():
-        return jsonify({'error': 'Local requests only'}), 403
+    batch zips) to a user-chosen absolute path. Local requests with the
+    session token only."""
+    if not _write_authorized():
+        return jsonify({'error': 'Not authorized'}), 403
     dest = request.args.get('path', '')
     if not os.path.isabs(dest) or not os.path.isdir(os.path.dirname(dest)):
         return jsonify({'error': 'Invalid destination path'}), 400
@@ -1392,7 +1426,11 @@ if __name__ == '__main__':
     load_tasks()
     threading.Thread(target=_cleanup_loop, daemon=True).start()
     port = int(os.environ.get('PORT', 5000))
+    # Self-hosted web mode serves the LAN (0.0.0.0) as documented; the
+    # desktop sidecar sets NEXTGENUP_HOST=127.0.0.1 so the packaged app
+    # never listens on the network.
+    host = os.environ.get('NEXTGENUP_HOST', '0.0.0.0')
     # Debug mode exposes the Werkzeug debugger (remote code execution) —
     # never enable it by default on 0.0.0.0. Opt in with FLASK_DEBUG=1.
     debug = os.environ.get('FLASK_DEBUG', '0') == '1'
-    app.run(debug=debug, host='0.0.0.0', port=port)
+    app.run(debug=debug, host=host, port=port)

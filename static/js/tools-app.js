@@ -12,6 +12,7 @@
 
     const $ = (sel) => document.querySelector(sel);
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const NGU_TOKEN = document.querySelector('meta[name="ngu-token"]')?.content || '';
 
     // ========================= SHARED HELPERS =========================
 
@@ -67,7 +68,7 @@
                 if (!path) return;
                 const res = await fetch('/api/save', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-NGU-Token': NGU_TOKEN },
                     body: JSON.stringify({ task_id: taskId, path }),
                 });
                 const data = await res.json();
@@ -100,6 +101,7 @@
                 if (!path) return;
                 const res = await fetch('/api/save-blob?path=' + encodeURIComponent(path), {
                     method: 'POST',
+                    headers: { 'X-NGU-Token': NGU_TOKEN },
                     body: blob,
                 });
                 const data = await res.json();

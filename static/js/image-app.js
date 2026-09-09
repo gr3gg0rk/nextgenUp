@@ -8,6 +8,7 @@
     'use strict';
 
     const MODEL_PATH = '/static/models/realesr-general-x4v3.onnx';
+    const NGU_TOKEN = document.querySelector('meta[name="ngu-token"]')?.content || '';
 
     // --- State ---
     const imgState = {
@@ -480,6 +481,7 @@
                 if (!path) return;
                 const res = await fetch('/api/save-blob?path=' + encodeURIComponent(path), {
                     method: 'POST',
+                    headers: { 'X-NGU-Token': NGU_TOKEN },
                     body: blob,
                 });
                 const data = await res.json();
@@ -508,7 +510,7 @@
                 if (!path) return;
                 const res = await fetch('/api/save', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-NGU-Token': NGU_TOKEN },
                     body: JSON.stringify({ task_id: taskId, path }),
                 });
                 const data = await res.json();

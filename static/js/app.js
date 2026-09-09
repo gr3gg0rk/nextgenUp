@@ -81,6 +81,11 @@
         showProWarning('WebGPU not supported in this browser. Use Chrome 113+.');
     }
 
+    // Session token for file-writing endpoints (embedded in the page, so
+    // only same-origin scripts can read it; the custom header forces a
+    // CORS preflight that blocks cross-origin requests).
+    const NGU_TOKEN = document.querySelector('meta[name="ngu-token"]')?.content || '';
+
     // External links: normal browsers open a tab; the desktop webview
     // blocks window.open, so fall back to asking the local server to
     // open the system browser.
@@ -89,7 +94,7 @@
         if (!w) {
             fetch('/api/open', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-NGU-Token': NGU_TOKEN },
                 body: JSON.stringify({ url }),
             }).catch(() => {});
         }
@@ -618,7 +623,7 @@
                 if (!path) return;
                 const res = await fetch('/api/save', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-NGU-Token': NGU_TOKEN },
                     body: JSON.stringify({ task_id: taskId, path }),
                 });
                 const data = await res.json();
