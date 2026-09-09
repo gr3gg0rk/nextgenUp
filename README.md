@@ -10,7 +10,7 @@
   <a href="https://github.com/riponcm/nextgenUp/stargazers"><img src="https://img.shields.io/github/stars/riponcm/nextgenUp?style=for-the-badge&color=fdcb6e&label=Stars" alt="GitHub stars"></a>
 </p>
 
-**NextGenUp** is a free, open-source **AI photo and video studio**: upscale images to 8K and videos to 4K, **remove backgrounds**, **erase unwanted objects**, **denoise and deblur photos**, and **colorize old black-and-white pictures** — using Real-ESRGAN, BiRefNet, LaMa, SCUNet, NAFNet, DDColor, and GFPGAN face restoration, entirely on your own machine. A free alternative to **Topaz Gigapixel AI**, **Topaz Video AI**, **remove.bg**, and **Magic Eraser** with no cloud, no subscription, no watermarks, and no upload of your files to anyone's server.
+**NextGenUp** is a free, open-source **AI photo, audio, and video studio**: upscale images to 8K and videos to 4K, **remove backgrounds**, **erase unwanted objects**, **denoise and deblur photos**, **colorize old black-and-white pictures**, **split songs into vocals and instrumental**, **remove background noise from recordings**, **master tracks with one click**, **compress videos to a target size**, and **remove music or noise from a video's audio** — using Real-ESRGAN, BiRefNet, LaMa, SCUNet, NAFNet, DDColor, GFPGAN, MDX-Net, and DeepFilterNet, entirely on your own machine. A free alternative to **Topaz Gigapixel AI**, **Topaz Video AI**, **remove.bg**, **Magic Eraser**, **lalal.ai / Moises**, **Adobe Podcast Enhance**, and **LANDR** with no cloud, no subscription, no watermarks, and no upload of your files to anyone's server.
 
 A [matily.org](https://matily.org) product. Free and open source under the MIT license.
 
@@ -27,11 +27,17 @@ A [matily.org](https://matily.org) product. Free and open source under the MIT l
 | Old photo colorization | Yes (DDColor) | No | No | No | No |
 | Face restoration | Yes (GFPGAN) | Yes | No | No | No |
 | Same-size enhance mode | Yes | Yes | No | No | No |
+| Vocal remover / stem splitter | Yes (MDX-Net) | No | No | No | No |
+| Audio noise removal | Yes (DeepFilterNet3) | No | No | No | No |
+| One-click mastering | Yes, with tuning | No | No | No | No |
+| Video compressor and GIF maker | Yes | No | No | No | No |
 | Batch + zip export | Yes | Yes | Paid API | Yes | Partial |
 | Runs fully offline | Yes | Yes | No (cloud) | Yes | Yes |
 | Also usable from any browser on your network | Yes | No | n/a | No | No |
 
-Excellent tools all around — NextGenUp's niche is covering **images, video, faces, backgrounds, and restoration** in one simple app that is free forever.
+And on the audio side, the same tools replace **lalal.ai / Moises** (~$10/month for stem separation), **Adobe Podcast Enhance** (cloud noise removal), and **LANDR / eMastered** (~$12/month mastering) — offline, unlimited, and free.
+
+Excellent tools all around — NextGenUp's niche is covering **images, audio, video, faces, backgrounds, and restoration** in one simple app that is free forever.
 
 ---
 
@@ -87,7 +93,23 @@ macOS note: builds are not notarized with Apple; on first launch, right-click th
 </p>
 
 <p align="center">
+  <img src="assets/screens/vocal-remover.png" alt="AI vocal remover: song split into vocals and instrumental stems, with original preview" width="860">
+</p>
+
+<p align="center">
+  <img src="assets/screens/mastering.png" alt="One-click mastering: measured loudness, decisions, before vs after, waveform and loudness-matched A/B player" width="860">
+</p>
+
+<p align="center">
+  <img src="assets/screens/noise-remover.png" alt="Audio noise remover: before and after players for a noisy recording" width="860">
+</p>
+
+<p align="center">
   <img src="assets/screens/video.png" alt="Video upscaling to 4K with live progress and cancel" width="860">
+</p>
+
+<p align="center">
+  <img src="assets/screens/video-tools.png" alt="Video tools: remove music or noise from a video's audio, compress to a target size, make a GIF" width="860">
 </p>
 
 <p align="center">
@@ -103,7 +125,12 @@ macOS note: builds are not notarized with Apple; on first launch, right-click th
 | Denoise and deblur | SCUNet removes grain and ISO noise; NAFNet removes motion blur and camera shake |
 | Magic Eraser | Brush over people, wires, trash, or photobombers and LaMa inpainting removes them — repeat as often as you like, with undo |
 | Old Photo Restore | DDColor colorizes black-and-white photos; combine with face restoration and detail enhancement in one pass |
+| Vocal Remover | MDX-Net (Kim Vocal 2) splits any song into vocals and instrumental — karaoke tracks, acapellas, samples — with per-stem preview and zip export |
+| Noise Remover (audio) | DeepFilterNet3 speech enhancement, the same engine as the official DeepFilterNet — podcasts, voice memos, interviews |
+| Mastering | One-click automatic mastering that measures the track and explains every decision, plus a tuning panel (tone, bass, treble, de-hiss, loudness, width) and a loudness-matched A/B player — entirely in your browser |
+| Tag Editor | View, strip, or replace MP3/WAV metadata losslessly; the audio is verified bit-for-bit identical |
 | Video upscaling | Basic (FFmpeg Lanczos + CAS sharpening) and Pro (Real-ESRGAN, frame by frame), single or bulk |
+| Video Tools | Remove noise, music, or voice from a video's audio track (picture untouched), compress to a target size (Discord, email, WhatsApp presets), make GIFs |
 | Enhance mode | Keep the original resolution but reconstruct detail — noise, blur, and JPEG artifacts removed |
 | Face restoration | GFPGAN v1.4 — detected faces are aligned, restored, and seamlessly blended back |
 | Batch processing | Drop multiple images or videos, process them all, download results individually or as one zip |
@@ -124,7 +151,12 @@ macOS note: builds are not notarized with Apple; on first launch, right-click th
    | Denoise & Deblur | Remove Noise for grainy low-light photos; Remove Blur for motion blur and camera shake |
    | Magic Eraser | Brush over anything unwanted, press Erase, repeat — with undo |
    | Old Photo Restore | Colorize black-and-white photos, restore faces, and enhance detail in one pass |
-   | Video Upscale | Basic (fast FFmpeg) or Pro (frame-by-frame AI) — drop several videos for a batch queue |
+   | Vocal Remover | Split a song into vocals and instrumental (karaoke / acapella) |
+   | Noise Remover | Clean background noise out of speech recordings |
+   | Mastering | One-click master with measurement, explanations, tuning, and A/B comparison |
+   | Tag Editor | Strip or rewrite MP3/WAV tags without touching the audio |
+   | Video Upscale 4K | Basic (fast FFmpeg) or Pro (frame-by-frame AI) — drop several videos for a batch queue |
+   | Video Tools | Remove noise / music / voice from the audio, compress to a size, or make a GIF |
 
 2. Drop a file onto the dropzone (or click to browse — select several files for batch mode).
 3. Press the action button. If a tool's AI model is not installed yet, it downloads once with a progress bar and then runs.
@@ -166,7 +198,7 @@ Quick / Enhance / Pro
                                       FFmpeg assembles video + audio
 ```
 
-The upscaling model is [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (`realesr-general-x4v3`, ~5 MB ONNX, bundled). The other tools use optional ONNX models that download on first use into the app's data folder: BiRefNet-lite (~224 MB, background removal), SCUNet (~77 MB, denoise), NAFNet (~92 MB, deblur), DDColor-tiny (~135 MB, colorization), and LaMa (~208 MB, object removal) — all MIT or Apache-2.0 licensed. Images are processed in overlapping tiles or windows so any resolution fits in memory; inference runs in a Web Worker (browser) or a background thread (server) so the interface never freezes. Completed tasks persist in SQLite, and files older than 24 hours are cleaned up automatically.
+The upscaling model is [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) (`realesr-general-x4v3`, ~5 MB ONNX, bundled). The other tools use optional ONNX models that download on first use into the app's data folder: BiRefNet-lite (~224 MB, background removal), SCUNet (~77 MB, denoise), NAFNet (~92 MB, deblur), DDColor-tiny (~135 MB, colorization), LaMa (~208 MB, object removal), Kim Vocal 2 (~67 MB, vocal separation), and DeepFilterNet3 (~8 MB, audio noise removal) — all MIT or Apache-2.0 licensed. Mastering and the Tag Editor need no model at all: they are pure DSP running in a Web Worker inside the page. Images are processed in overlapping tiles or windows so any resolution fits in memory; inference runs in a Web Worker (browser) or a background thread (server) so the interface never freezes. Completed tasks persist in SQLite, and files older than 24 hours are cleaned up automatically.
 
 ## Configuration
 
@@ -186,6 +218,8 @@ ai_engine.py               Server-side Real-ESRGAN (ONNX Runtime, tiled)
 bg_remove.py               BiRefNet background removal
 restore_engine.py          SCUNet denoise, NAFNet deblur, DDColor colorize, LaMa inpaint
 model_store.py             Registry + on-demand downloader for the optional AI models
+audio_engine.py            MDX-Net vocal separation, DeepFilterNet3 noise removal
+video_tools.py             Video audio cleanup, two-pass compressor, GIF maker
 face_restore.py            GFPGAN face restoration + YuNet detection
 paths.py                   Dev vs. packaged path resolution
 templates/index.html       Dashboard (all tools)
@@ -193,6 +227,9 @@ static/js/app.js           Video controller (single + batch), navigation, About 
 static/js/image-app.js     Image upscale controller: modes, batch, compare slider
 static/js/bg-app.js        Background remover controller
 static/js/tools-app.js     Denoise/deblur, Magic Eraser, and Old Photo Restore controllers
+static/js/audio-app.js     Vocal Remover, Noise Remover, Mastering, Tag Editor controllers
+static/js/vtools-app.js    Video Tools controller
+static/js/vendor/          ReMaster mastering + tag-surgery core (worker bundle)
 static/js/pro-worker.js    ONNX inference worker (tiling, WebGPU/WASM)
 src-tauri/                 Desktop shell (Tauri 2): sidecar, auto-updater
 nextgenup-server.spec      PyInstaller build for the bundled server
@@ -230,7 +267,7 @@ Yes, for most use cases. NextGenUp uses Real-ESRGAN — the same family of super
 No. Everything runs locally on your machine — the AI models, FFmpeg, and the server all execute on your own hardware. Your files never leave your computer.
 
 **What AI models does NextGenUp use?**
-Real-ESRGAN for super-resolution, BiRefNet for background removal, LaMa for object removal, SCUNet for denoising, NAFNet for deblurring, DDColor for colorization, GFPGAN v1.4 for face restoration, and YuNet for face detection — all running locally through ONNX Runtime, all under MIT or Apache-2.0 licenses.
+Real-ESRGAN for super-resolution, BiRefNet for background removal, LaMa for object removal, SCUNet for denoising, NAFNet for deblurring, DDColor for colorization, GFPGAN v1.4 for face restoration, YuNet for face detection, MDX-Net (Kim Vocal 2) for vocal separation, and DeepFilterNet3 for audio noise removal — all running locally through ONNX Runtime, all under MIT or Apache-2.0 licenses. Mastering and tag editing use hand-written DSP that runs in the browser.
 
 **Is NextGenUp a free alternative to remove.bg?**
 Yes. The Background Remover uses BiRefNet, a state-of-the-art segmentation model, and outputs a transparent PNG (or any background color you choose) with no per-image fees, no signup, and no upload — including batch removal with zip export.
@@ -242,7 +279,25 @@ Open Magic Eraser, drop your photo, brush over whatever you want gone, and press
 Yes. Old Photo Restore uses DDColor to add realistic color to black-and-white or sepia photos. Tick "Restore faces" and "Enhance detail" to also repair faces and recover sharpness in the same pass.
 
 **Do the AI models make the app download huge?**
-No. The installer ships only the small upscaling model. The optional tools (background removal, denoise, deblur, colorize, eraser) each download their model once on first use, with a progress bar, ranging from 77 MB to 224 MB. Tools you never open download nothing.
+No. The installer ships only the small upscaling model. The optional tools (background removal, denoise, deblur, colorize, eraser, vocal separation, audio noise removal) each download their model once on first use, with a progress bar, ranging from 8 MB to 224 MB. Tools you never open download nothing.
+
+**Is there a free vocal remover or stem splitter like lalal.ai or Moises?**
+Yes. NextGenUp's Vocal Remover uses MDX-Net (Kim Vocal 2), one of the best-rated open separation models, to split any song into a vocals stem and an instrumental stem locally — for karaoke tracks, acapellas, remixes, or sampling. No per-minute fees, no upload, and you can preview each stem and download both as a zip.
+
+**How do I remove background noise from a recording or podcast for free?**
+Open Noise Remover and drop the file. NextGenUp runs DeepFilterNet3, the same speech-enhancement engine as the official DeepFilterNet project (its output is numerically identical), so hiss, fan noise, traffic, and room tone are removed while the voice stays natural. Video Tools does the same for a video's audio track without re-encoding the picture.
+
+**Can NextGenUp master a song automatically?**
+Yes. Mastering measures the track (loudness, true peak, dynamics, spectral balance, stereo width), decides every setting from what it hears, explains each decision in plain language, and lets you A/B the result loudness-matched against the original. A tuning panel exposes tone target, correction strength, bass, treble, de-hiss, loudness target, and stereo width, so you can nudge the automatic master to taste. It runs entirely in the app window; nothing is uploaded. Output is 24-bit WAV.
+
+**How do I remove music from a video but keep the voice?**
+Video Tools → Remove Music. The audio track is separated with MDX-Net, the voice stem is kept, and it is remuxed with the original video stream — the picture is copied, not re-encoded. Remove Voice does the opposite (a karaoke video), and Remove Noise cleans the speech.
+
+**How do I compress a video for Discord, WhatsApp, or email?**
+Video Tools → Compress, pick a target size (10 MB Discord, 25 MB email, 100 MB WhatsApp, or custom), and NextGenUp runs a two-pass H.264 encode that lands on that size. Make GIF converts a clip to a palette-optimized animated GIF.
+
+**Does the Tag Editor change my audio?**
+No. It performs byte-level surgery on the metadata blocks (ID3v2, ID3v1, APE, RIFF INFO, and others), the audio payload is copied unchanged, and the file is hashed before and after to prove it is bit-for-bit identical. You can strip every tag or write your own title, artist, album, year, genre, track, and comment.
 
 **How do I upscale a video to 4K?**
 Open the Video Upscale tab, drop in your video, choose Basic (fast) or Pro (AI), select 4x, and press Start Upscaling. A 720p video becomes 4K (3840x2160); portrait videos are handled automatically. Audio is preserved.
@@ -278,6 +333,9 @@ NextGenUp stands on excellent open work:
 - [DDColor](https://github.com/piddnad/DDColor) (Xiaoyang Kang et al.) — photo colorization
 - [GFPGAN](https://github.com/TencentARC/GFPGAN) (Tencent ARC) — face restoration
 - [YuNet](https://github.com/opencv/opencv_zoo) (OpenCV Zoo) — face detection
+- [MDX-Net / Kim Vocal 2](https://github.com/Anjok07/ultimatevocalremovergui) (KimberleyJensen, UVR community) — vocal separation
+- [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) (Hendrik Schröter et al.) — speech noise removal
+- [ReMaster](https://github.com/riponcm/ReMaster-Pro) (Matily) — mastering chain and lossless tag surgery
 - [FFmpeg](https://ffmpeg.org) — video processing (bundled builds are GPL; FFmpeg keeps its own license)
 - [ONNX Runtime](https://onnxruntime.ai) — AI inference on server and in the browser
 - [Tauri](https://tauri.app) — desktop shell

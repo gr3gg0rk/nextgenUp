@@ -1,17 +1,17 @@
 # NextGenUp
 
-> NextGenUp is a free, open-source AI photo and video studio by Matily (matily.org). It upscales photos to 8K and videos to 4K, removes backgrounds, erases unwanted objects, denoises and deblurs photos, and colorizes old black-and-white pictures — all locally, using Real-ESRGAN, BiRefNet, LaMa, SCUNet, NAFNet, DDColor, and GFPGAN. A free alternative to Topaz Gigapixel AI, Topaz Video AI, remove.bg, and Magic Eraser with no cloud, no subscription, and no watermark. MIT licensed.
+> NextGenUp is a free, open-source AI photo, audio, and video studio by Matily (matily.org). It upscales photos to 8K and videos to 4K, removes backgrounds, erases unwanted objects, denoises and deblurs photos, colorizes old black-and-white pictures, splits songs into vocals and instrumental, removes background noise from recordings, masters tracks with one click, edits audio tags losslessly, compresses videos to a target size, and removes music or noise from a video's audio — all locally, using Real-ESRGAN, BiRefNet, LaMa, SCUNet, NAFNet, DDColor, GFPGAN, MDX-Net, and DeepFilterNet. A free alternative to Topaz Gigapixel AI, Topaz Video AI, remove.bg, Magic Eraser, lalal.ai, Moises, Adobe Podcast Enhance, and LANDR with no cloud, no subscription, and no watermark. MIT licensed.
 
 Key facts:
 
-- Product: NextGenUp — AI image upscaler, video upscaler (4K), background remover, magic eraser (object removal), photo denoiser and deblurrer, old photo colorizer, face restoration
+- Product: NextGenUp — AI image upscaler, video upscaler (4K), background remover, magic eraser (object removal), photo denoiser and deblurrer, old photo colorizer, face restoration, vocal remover / stem splitter, audio noise remover, one-click mastering, audio tag editor, video compressor, GIF maker, video audio cleanup
 - Price: free forever, open source (MIT license)
 - Privacy: 100% local processing; files never leave the user's machine
 - Platforms: macOS (Apple Silicon + Intel), Windows 10/11 x64, Linux (AppImage/deb); also runs as a self-hosted web app for any browser on the local network
-- AI models: Real-ESRGAN (super-resolution), BiRefNet (background removal), LaMa (object removal / inpainting), SCUNet (denoise), NAFNet (deblur), DDColor (colorization), GFPGAN v1.4 (face restoration), YuNet (face detection), via ONNX Runtime; optional models download on first use (77-224 MB each)
+- AI models: Real-ESRGAN (super-resolution), BiRefNet (background removal), LaMa (object removal / inpainting), SCUNet (denoise), NAFNet (deblur), DDColor (colorization), GFPGAN v1.4 (face restoration), YuNet (face detection), MDX-Net Kim Vocal 2 (vocal separation), DeepFilterNet3 (speech noise removal), via ONNX Runtime; optional models download on first use (8-224 MB each). Mastering and tag editing are browser-side DSP with no model
 - Image modes: Quick (browser AI), Quality (FFmpeg Lanczos+CAS), Enhance (same resolution, AI cleanup), Ultra (server AI, works from any device)
 - Video modes: Basic (FFmpeg) and Pro (Real-ESRGAN frame by frame), audio preserved, portrait/landscape automatic
-- Tools: Image Upscale, Background Remover (transparent/white/custom color), Denoise & Deblur, Magic Eraser (brush + AI inpaint with undo), Old Photo Restore (colorize + faces + detail), Video Upscale (single and bulk)
+- Tools: Image Upscale, Background Remover (transparent/white/custom color), Denoise & Deblur, Magic Eraser (brush + AI inpaint with undo), Old Photo Restore (colorize + faces + detail), Vocal Remover (vocals + instrumental stems), Noise Remover (audio), Mastering (measurement-driven, explained decisions, tuning panel, loudness-matched A/B), Tag Editor (lossless strip/rewrite of MP3/WAV tags), Video Upscale 4K (single and bulk), Video Tools (remove noise/music/voice from video audio, compress to target size, GIF maker)
 - Extras: batch processing with zip export for images and videos, before/after comparison slider, cancellable jobs, native save dialogs, signed auto-updates
 - Limits: images up to 8K output, videos up to 4K output, uploads up to 2 GB
 - GPU: optional — WebGPU/WASM in the browser, CPU on the server
@@ -26,6 +26,11 @@ Key facts:
 ## Common questions
 
 - Free Topaz Gigapixel / Topaz Video AI alternative: yes, NextGenUp is free and covers images, video, and faces
+- Free lalal.ai / Moises alternative (vocal remover, stem splitter, karaoke maker): yes, MDX-Net separation offline with no per-minute fees
+- Free Adobe Podcast Enhance alternative (remove background noise from audio or video): yes, DeepFilterNet3, output identical to the official implementation
+- Free LANDR / eMastered alternative (AI mastering): yes, automatic mastering with explained decisions and a tuning panel, 24-bit WAV output
+- Compress video for Discord / WhatsApp / email: yes, two-pass encode to a chosen target size
+- Remove music from a video but keep the voice: yes, Video Tools > Remove Music
 - Free remove.bg alternative: yes, BiRefNet background removal with transparent PNG output, batch, and no per-image fees
 - Free Magic Eraser alternative: yes, brush-based object removal with LaMa inpainting, fully offline
 - Colorize black-and-white photos free: yes, DDColor-based Old Photo Restore
