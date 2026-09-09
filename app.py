@@ -53,6 +53,12 @@ except Exception as e:
     print(f'[startup] audio tools unavailable: {e}', flush=True)
     audio_engine = None
 
+try:
+    import video_tools
+except Exception as e:
+    print(f'[startup] video tools unavailable: {e}', flush=True)
+    video_tools = None
+
 def _find_bin(name):
     """Find a binary next to the packaged executable, in PATH, or in
     common install locations."""
@@ -287,7 +293,8 @@ def _find_output(task_id):
     if _safe_task_id(task_id):
         for suffix in ('_basic_4k.mp4', '_pro_4k.mp4', '_upscaled.png',
                        '_nobg.png', '_clean.png', '_restored.png',
-                       '_erased.png', '.zip', '.wav', '_denoised.wav'):
+                       '_erased.png', '.zip', '.wav', '_denoised.wav',
+                       '.mp4', '.gif'):
             p = os.path.join(app.config['OUTPUT_FOLDER'], task_id + suffix)
             if os.path.exists(p):
                 return p
@@ -1099,6 +1106,170 @@ def audio_download(task_id):
             if os.path.exists(p):
                 return send_file(p, as_attachment=True,
                                  download_name=task_id + suffix)
+    return jsonify({'error': 'Not ready'}), 404
+
+
+# --- Video tools: audio cleanup, compression, GIF ---
+
+def _register_result(child_id, path, name):
+    tasks[child_id] = {'status': 'completed', 'output': path,
+                       'filename': name, 'progress': 100, 'message': 'Done!'}
+    save_task(child_id)
+
+
+def _video_tool_progress(task):
+    def cb(pct, msg):
+        if task.get('cancel_requested'):
+            raise TaskCancelled()
+        task['progress'] = min(98, pct)
+        task['message'] = msg
+    return cb
+
+
+@app.route('/api/video/audio', methods=['POST'])
+def video_audio():
+    data = request.json or {}
+    task_id = data.get('task_id')
+    mode = data.get('mode', 'denoise')
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    if mode not in ('denoise', 'remove_music', 'remove_voice'):
+        return jsonify({'error': 'Invalid mode'}), 400
+    model_key = 'denoise_speech' if mode == 'denoise' else 'separate'
+    if not (video_tools and model_store and model_store.available(model_key)):
+        return jsonify({'error': 'Model not installed'}), 400
+    return _start_tool_thread(task_id, _run_video_audio, mode)
+
+
+def _run_video_audio(task_id, mode):
+    task = tasks[task_id]
+    child_id = task_id + '_cln'
+    out_path = os.path.join(app.config['OUTPUT_FOLDER'], child_id + '.mp4')
+    stem = Path(task['filename']).stem
+    label = {'denoise': 'denoised', 'remove_music': 'voice_only',
+             'remove_voice': 'music_only'}[mode]
+    try:
+        video_tools.clean_audio(task['input'], out_path, mode,
+                                app.config['UPLOAD_FOLDER'],
+                                progress_cb=_video_tool_progress(task))
+        _register_result(child_id, out_path, f'{stem}_{label}.mp4')
+        task['status'] = 'completed'
+        task['progress'] = 100
+        task['message'] = 'Done!'
+        task['result_id'] = child_id
+    except TaskCancelled:
+        task['status'] = 'cancelled'
+        task['message'] = 'Cancelled'
+    except Exception as e:
+        print(f'[video-audio] error: {e}', flush=True)
+        task['status'] = 'error'
+        task['message'] = f'Audio cleanup error: {str(e)[:200]}'
+    save_task(task_id)
+
+
+@app.route('/api/video/compress', methods=['POST'])
+def video_compress():
+    data = request.json or {}
+    task_id = data.get('task_id')
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    try:
+        target_mb = float(data.get('target_mb', 25))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid target size'}), 400
+    if not 1 <= target_mb <= 2000:
+        return jsonify({'error': 'Target size must be 1-2000 MB'}), 400
+    if not video_tools:
+        return jsonify({'error': 'Video tools unavailable'}), 500
+    return _start_tool_thread(task_id, _run_video_compress, target_mb)
+
+
+def _run_video_compress(task_id, target_mb):
+    task = tasks[task_id]
+    child_id = task_id + '_cmp'
+    out_path = os.path.join(app.config['OUTPUT_FOLDER'], child_id + '.mp4')
+    stem = Path(task['filename']).stem
+    try:
+        duration = (task.get('info') or {}).get('duration') or \
+            audio_engine.probe_duration(task['input'])
+        video_tools.compress(task['input'], out_path, target_mb, duration,
+                             app.config['UPLOAD_FOLDER'],
+                             progress_cb=_video_tool_progress(task))
+        size_mb = os.path.getsize(out_path) / 1e6
+        _register_result(child_id, out_path, f'{stem}_compressed.mp4')
+        task['status'] = 'completed'
+        task['progress'] = 100
+        task['message'] = f'Done! {size_mb:.1f} MB'
+        task['result_id'] = child_id
+    except TaskCancelled:
+        task['status'] = 'cancelled'
+        task['message'] = 'Cancelled'
+    except Exception as e:
+        print(f'[video-compress] error: {e}', flush=True)
+        task['status'] = 'error'
+        task['message'] = f'Compression error: {str(e)[:200]}'
+    save_task(task_id)
+
+
+@app.route('/api/video/gif', methods=['POST'])
+def video_gif():
+    data = request.json or {}
+    task_id = data.get('task_id')
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    try:
+        fps = int(data.get('fps', 15))
+        width = int(data.get('width', 480))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid options'}), 400
+    if not (5 <= fps <= 30 and 120 <= width <= 1280):
+        return jsonify({'error': 'fps must be 5-30, width 120-1280'}), 400
+    if not video_tools:
+        return jsonify({'error': 'Video tools unavailable'}), 500
+    return _start_tool_thread(task_id, _run_video_gif, fps, width)
+
+
+def _run_video_gif(task_id, fps, width):
+    task = tasks[task_id]
+    child_id = task_id + '_gif'
+    out_path = os.path.join(app.config['OUTPUT_FOLDER'], child_id + '.gif')
+    stem = Path(task['filename']).stem
+    try:
+        video_tools.to_gif(task['input'], out_path, fps, width,
+                           app.config['UPLOAD_FOLDER'],
+                           progress_cb=_video_tool_progress(task))
+        size_mb = os.path.getsize(out_path) / 1e6
+        _register_result(child_id, out_path, f'{stem}.gif')
+        task['status'] = 'completed'
+        task['progress'] = 100
+        task['message'] = f'Done! {size_mb:.1f} MB'
+        task['result_id'] = child_id
+    except TaskCancelled:
+        task['status'] = 'cancelled'
+        task['message'] = 'Cancelled'
+    except Exception as e:
+        print(f'[video-gif] error: {e}', flush=True)
+        task['status'] = 'error'
+        task['message'] = f'GIF error: {str(e)[:200]}'
+    save_task(task_id)
+
+
+@app.route('/api/file/<task_id>')
+def file_download(task_id):
+    """Generic download for any completed result task."""
+    task = tasks.get(task_id)
+    if task and task.get('status') == 'completed' and task.get('output') \
+            and os.path.exists(task['output']):
+        return send_file(task['output'], as_attachment=True,
+                         download_name=task.get('filename') or
+                         os.path.basename(task['output']))
+    src = _find_output(task_id)
+    if src:
+        return send_file(src, as_attachment=True,
+                         download_name=os.path.basename(src))
     return jsonify({'error': 'Not ready'}), 404
 
 

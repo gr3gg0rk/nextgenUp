@@ -35,6 +35,13 @@ def _ffmpeg():
         p = os.path.join(paths.EXE_DIR, exe)
         if os.path.isfile(p):
             return p
+    # Dev mode: prefer the static build vendored for the desktop app —
+    # system ffmpeg installs (e.g. Anaconda's) can be dynamic or crippled
+    import glob
+    for p in sorted(glob.glob(os.path.join(paths.BUNDLE_DIR, 'src-tauri',
+                                           'binaries', 'ffmpeg-*'))):
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
     import shutil
     return shutil.which('ffmpeg') or 'ffmpeg'
 

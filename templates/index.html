@@ -202,7 +202,15 @@
                         <polygon points="23 7 16 12 23 17 23 7"/>
                         <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                     </svg>
-                    <span>Video Upscale</span>
+                    <span>Video Upscale 4K</span>
+                </button>
+                <button class="nav-item" data-tab="vtools" id="nav-vtools">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <path d="M2 9h20M7 4v5M17 4v5"/>
+                        <circle cx="12" cy="15" r="2.5"/>
+                    </svg>
+                    <span>Video Tools</span>
                 </button>
             </nav>
             <div class="sidebar-footer">
@@ -1466,6 +1474,113 @@
                 </section>
             </main>
 
+            <!-- ===================== VIDEO TOOLS TAB ===================== -->
+            <main class="tab-content" id="tab-vtools">
+                <section id="vtools-upload-section">
+                    <div id="vtools-dropzone" class="dropzone">
+                        <input type="file" id="vtools-file-input" accept="video/mp4,video/quicktime,video/webm,video/x-matroska,video/avi,.mp4,.mov,.webm,.mkv,.avi" hidden>
+                        <div class="dropzone-content">
+                            <div class="dropzone-icon">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                    <path d="M2 9h20M7 4v5M17 4v5"/>
+                                    <circle cx="12" cy="15" r="2.5"/>
+                                </svg>
+                            </div>
+                            <h3>Drop a video here</h3>
+                            <p>clean the audio, remove music, compress, or make a GIF</p>
+                            <span class="dropzone-hint">MP4, MOV, WebM, MKV &bull; Max 2GB</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="vtools-app-section" class="hidden">
+                    <div class="audio-file-card">
+                        <div>
+                            <h3 id="vtools-file-name">video.mp4</h3>
+                            <p class="batch-sub" id="vtools-file-info"></p>
+                        </div>
+                    </div>
+
+                    <div class="options-row">
+                        <div class="option-group">
+                            <label>Tool</label>
+                            <div class="scale-buttons" id="vtools-mode-buttons">
+                                <button class="scale-btn selected" data-vtool="denoise">Remove Noise</button>
+                                <button class="scale-btn" data-vtool="remove_music">Remove Music</button>
+                                <button class="scale-btn" data-vtool="remove_voice">Remove Voice</button>
+                                <button class="scale-btn" data-vtool="compress">Compress</button>
+                                <button class="scale-btn" data-vtool="gif">Make GIF</button>
+                            </div>
+                        </div>
+                        <div class="option-group hidden" id="vtools-compress-opts">
+                            <label>Target Size</label>
+                            <select id="vtools-target-mb" class="batch-select">
+                                <option value="10">10 MB (Discord)</option>
+                                <option value="25" selected>25 MB (email, Discord Nitro Basic)</option>
+                                <option value="50">50 MB</option>
+                                <option value="100">100 MB (WhatsApp)</option>
+                                <option value="200">200 MB</option>
+                            </select>
+                        </div>
+                        <div class="option-group hidden" id="vtools-gif-opts">
+                            <label>GIF Options</label>
+                            <div style="display:flex; gap:8px">
+                                <select id="vtools-gif-fps" class="batch-select">
+                                    <option value="10">10 fps</option>
+                                    <option value="15" selected>15 fps</option>
+                                    <option value="20">20 fps</option>
+                                </select>
+                                <select id="vtools-gif-width" class="batch-select">
+                                    <option value="320">320 px</option>
+                                    <option value="480" selected>480 px</option>
+                                    <option value="640">640 px</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="option-group">
+                            <label>About</label>
+                            <span class="output-res" id="vtools-hint">AI removes background noise from the audio track</span>
+                        </div>
+                        <button class="upscale-btn" id="vtools-start-btn">Run</button>
+                    </div>
+
+                    <div id="vtools-progress-section" class="progress-section hidden">
+                        <div class="progress-header">
+                            <span id="vtools-progress-message">Processing...</span>
+                            <span class="progress-right">
+                                <span id="vtools-progress-percent">0%</span>
+                                <button class="cancel-btn" id="vtools-cancel-btn">Cancel</button>
+                            </span>
+                        </div>
+                        <div class="progress-track"><div class="progress-fill" id="vtools-progress-fill"></div></div>
+                    </div>
+
+                    <div id="vtools-results" class="hidden">
+                        <div class="video-panel" style="margin-bottom:14px">
+                            <div class="panel-header">
+                                <span class="panel-label" id="vtools-result-label">Result</span>
+                                <span class="panel-badge" id="vtools-result-size"></span>
+                            </div>
+                            <video id="vtools-result-video" controls playsinline class="hidden" style="width:100%"></video>
+                            <img id="vtools-result-gif" alt="GIF result" class="hidden" style="width:100%">
+                        </div>
+                        <div class="new-video-row">
+                            <button class="download-btn" id="vtools-save">Save Result</button>
+                        </div>
+                    </div>
+
+                    <div class="new-video-row hidden" id="vtools-new-row">
+                        <button class="new-video-btn" id="vtools-new-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Upload New Video
+                        </button>
+                    </div>
+                </section>
+            </main>
+
         </div><!-- /content-area -->
     </div><!-- /app-layout -->
 
@@ -1489,5 +1604,6 @@
     <script src="/static/js/tools-app.js"></script>
     <script src="/static/js/vendor/remaster-lib.js"></script>
     <script src="/static/js/audio-app.js"></script>
+    <script src="/static/js/vtools-app.js"></script>
 </body>
 </html>
