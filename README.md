@@ -43,12 +43,12 @@ Excellent tools all around — NextGenUp's niche is covering **images, audio, vi
 
 ## Download
 
-| Platform | File | Notes |
-|----------|------|-------|
-| macOS (Apple Silicon) | [Download .dmg](https://github.com/riponcm/nextgenUp/releases/latest) | M1/M2/M3/M4 Macs |
-| macOS (Intel) | [Download .dmg](https://github.com/riponcm/nextgenUp/releases/latest) | x64 build |
-| Windows 10/11 (x64) | [Download installer](https://github.com/riponcm/nextgenUp/releases/latest) | NSIS `.exe` or `.msi` |
-| Linux (x64) | [Download .AppImage / .deb](https://github.com/riponcm/nextgenUp/releases/latest) | Most distributions |
+| Your computer | Download | Notes |
+|---|---|---|
+| **Windows** 10 / 11 | [NextGenUp-Windows-Setup.exe](https://github.com/riponcm/nextgenUp/releases/latest/download/NextGenUp-Windows-Setup.exe) | Most users. SmartScreen may ask once: click **More info**, then **Run anyway** |
+| **Mac** with Apple Silicon (M1, M2, M3, M4) | [NextGenUp-Mac-AppleSilicon.dmg](https://github.com/riponcm/nextgenUp/releases/latest/download/NextGenUp-Mac-AppleSilicon.dmg) | Macs from 2020 onward. Not sure? Apple menu > About This Mac > "Chip" |
+| **Mac** with Intel | [NextGenUp-Mac-Intel.dmg](https://github.com/riponcm/nextgenUp/releases/latest/download/NextGenUp-Mac-Intel.dmg) | Macs from 2019 and earlier |
+| **Linux** | [NextGenUp-Linux.AppImage](https://github.com/riponcm/nextgenUp/releases/latest/download/NextGenUp-Linux.AppImage) | Any distribution. `chmod +x` then run. An RPM is also on the release page |
 
 Every installer is fully self-contained — the AI engine, FFmpeg, and the upscaling models are bundled. Install, open, upscale. The app checks for updates on launch and installs them with one click (signed releases).
 
