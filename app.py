@@ -64,9 +64,12 @@ def _find_bin(name):
     common install locations."""
     exe_name = name + '.exe' if sys.platform == 'win32' else name
     if paths.EXE_DIR:
-        p = os.path.join(paths.EXE_DIR, exe_name)
-        if os.path.isfile(p):
-            return p
+        # Linux packages ship 'nextgenup-ffmpeg' so they don't collide with
+        # the distro's /usr/bin/ffmpeg (issue #7); macOS/Windows keep 'ffmpeg'
+        for cand in ('nextgenup-' + exe_name, exe_name):
+            p = os.path.join(paths.EXE_DIR, cand)
+            if os.path.isfile(p):
+                return p
     found = shutil.which(name)
     if found:
         return found

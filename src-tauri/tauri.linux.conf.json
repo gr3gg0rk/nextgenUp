@@ -1,0 +1,9 @@
+{
+  "bundle": {
+    "externalBin": [
+      "binaries/nextgenup-server",
+      "binaries/nextgenup-ffmpeg",
+      "binaries/nextgenup-ffprobe"
+    ]
+  }
+}

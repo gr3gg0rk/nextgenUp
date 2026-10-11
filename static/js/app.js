@@ -47,6 +47,21 @@
     initSidebar();
     initAbout();
 
+    // The adapter check below only says WebGPU exists. Once an upscale has
+    // started, show the backend that is really running (issue #4).
+    window.addEventListener('ngu-backend', (e) => {
+        const { backend, reason } = e.detail || {};
+        const dot = gpuBadge.querySelector('.badge-dot');
+        if (backend === 'webgpu') {
+            dot.classList.remove('unavailable'); dot.classList.add('active');
+            gpuStatus.textContent = 'WebGPU active';
+            gpuBadge.title = '';
+        } else if (reason && reason !== 'No WebGPU adapter available') {
+            gpuStatus.textContent = 'Using CPU (WebGPU failed)';
+            gpuBadge.title = 'WebGPU error: ' + reason;
+        }
+    });
+
     async function checkWebGPU() {
         const dot = gpuBadge.querySelector('.badge-dot');
         let webgpu = false;

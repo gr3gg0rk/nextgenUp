@@ -91,9 +91,12 @@ jobs:
           curl -L -o /tmp/ffmpeg.tar.xz "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
           tar -xf /tmp/ffmpeg.tar.xz -C /tmp
           FFDIR=$(find /tmp -maxdepth 1 -type d -name "ffmpeg-*-static" | head -1)
-          cp "$FFDIR/ffmpeg"  "src-tauri/binaries/ffmpeg-${{ matrix.target }}"
-          cp "$FFDIR/ffprobe" "src-tauri/binaries/ffprobe-${{ matrix.target }}"
-          chmod +x src-tauri/binaries/ff*
+          # Prefixed names: deb/rpm install sidecars into /usr/bin, where a
+          # plain "ffmpeg" collides with the distro package (issue #7).
+          # tauri.linux.conf.json lists these names for Linux builds only.
+          cp "$FFDIR/ffmpeg"  "src-tauri/binaries/nextgenup-ffmpeg-${{ matrix.target }}"
+          cp "$FFDIR/ffprobe" "src-tauri/binaries/nextgenup-ffprobe-${{ matrix.target }}"
+          chmod +x src-tauri/binaries/nextgenup-ff*
 
       - name: Download FFmpeg (Windows)
         if: startsWith(matrix.os, 'windows')
@@ -148,3 +151,19 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe*
             src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi*
           if-no-files-found: warn
+
+  # Runs once after every platform has uploaded (tag builds only): renames the
+  # installers to OS-friendly names, moves auto-update packages to the
+  # permanent `updater-packages` pre-release, drops .sig files (signatures
+  # live inside latest.json) and rewrites latest.json to match.
+  finalize:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tidy release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 .github/scripts/finalize_release.py "${{ github.ref_name }}"

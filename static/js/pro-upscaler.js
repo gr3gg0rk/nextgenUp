@@ -31,6 +31,10 @@ class ProUpscaler {
                 if (e.data.type === 'ready') {
                     clearTimeout(timeout);
                     this.backend = e.data.backend;
+                    if (e.data.fallbackReason) {
+                        console.warn('[NextGenUp] AI upscaling runs on WASM (CPU):', e.data.fallbackReason);
+                    }
+                    ProUpscaler.announce(this.backend, e.data.fallbackReason);
                     resolve();
                 } else if (e.data.type === 'error') {
                     clearTimeout(timeout);
@@ -51,6 +55,13 @@ class ProUpscaler {
         return this.backend;
     }
 
+    /** Tell the page which backend actually runs (the header badge listens). */
+    static announce(backend, reason) {
+        try {
+            window.dispatchEvent(new CustomEvent('ngu-backend', { detail: { backend, reason: reason || null } }));
+        } catch { /* not in a window context */ }
+    }
+
     async processFrame(imageData) {
         return new Promise((resolve, reject) => {
             if (!this.worker) {
@@ -66,6 +77,10 @@ class ProUpscaler {
                         e.data.width,
                         e.data.height
                     ));
+                } else if (e.data.type === 'backendChanged') {
+                    this.backend = e.data.backend;
+                    console.warn('[NextGenUp] Switched AI upscaling to WASM (CPU):', e.data.reason);
+                    ProUpscaler.announce(this.backend, e.data.reason);
                 } else if (e.data.type === 'tileProgress' && this.onTileProgress) {
                     this.onTileProgress(e.data.done, e.data.total);
                 } else if (e.data.type === 'error') {

@@ -9,6 +9,7 @@ let outputName = 'output';
 let tileSize = 64;
 let tilePad = 8;
 let backend = 'wasm';
+let modelPath = null;
 const scale = 4;
 
 self.onmessage = async (e) => {
@@ -16,7 +17,7 @@ self.onmessage = async (e) => {
     try {
         switch (msg.type) {
             case 'init': await handleInit(msg); break;
-            case 'frame': await handleFrame(msg); break;
+            case 'frame': await handleFrameSafe(msg); break;
             case 'dispose': handleDispose(); break;
         }
     } catch (err) {
@@ -24,50 +25,79 @@ self.onmessage = async (e) => {
     }
 };
 
+// WebGPU must use the channels-first (NCHW) layout. With ORT's default
+// channels-last layout the final graph output of realesr-general-x4v3 cannot
+// be allocated ("Failed to generate kernel's output[0]", reported on the /Clip
+// node), so every WebGPU run used to fall back to WASM silently (issue #4).
+const WEBGPU_EP = { name: 'webgpu', preferredLayout: 'NCHW' };
+
+async function createSession(kind) {
+    const s = await ort.InferenceSession.create(modelPath, {
+        executionProviders: [kind === 'webgpu' ? WEBGPU_EP : 'wasm'],
+        graphOptimizationLevel: 'all',
+    });
+    // Warmup run: some kernels only fail at run time, not at create time
+    const feeds = {};
+    feeds[s.inputNames[0]] = new ort.Tensor('float32', new Float32Array(3 * 16 * 16), [1, 3, 16, 16]);
+    await s.run(feeds);
+    return s;
+}
+
+function useSession(s, kind) {
+    session = s;
+    inputName = s.inputNames[0];
+    outputName = s.outputNames[0];
+    backend = kind;
+    if (kind === 'webgpu') { tileSize = 128; tilePad = 12; }
+    else { tileSize = 64; tilePad = 8; }
+}
+
 async function handleInit(msg) {
     ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/';
     ort.env.wasm.numThreads = 1;
+    modelPath = msg.modelPath;
 
-    const strategies = [];
+    let fallbackReason = null;
+    let gpu = false;
     if (typeof navigator !== 'undefined' && navigator.gpu) {
-        try {
-            const adapter = await navigator.gpu.requestAdapter();
-            if (adapter) strategies.push(['webgpu']);
-        } catch {}
+        try { gpu = !!(await navigator.gpu.requestAdapter()); } catch {}
     }
-    strategies.push(['wasm']);
 
-    for (const providers of strategies) {
+    if (gpu) {
+        let s = null;
         try {
-            session = await ort.InferenceSession.create(msg.modelPath, {
-                executionProviders: providers,
-                graphOptimizationLevel: 'all',
-            });
-
-            inputName = session.inputNames[0];
-            outputName = session.outputNames[0];
-
-            // Warmup
-            const testTensor = new ort.Tensor('float32', new Float32Array(3 * 16 * 16), [1, 3, 16, 16]);
-            const feeds = {};
-            feeds[inputName] = testTensor;
-            await session.run(feeds);
-
-            backend = providers[0];
-
-            if (backend === 'webgpu') {
-                tileSize = 128;
-                tilePad = 12;
-            }
-
+            s = await createSession('webgpu');
+            useSession(s, 'webgpu');
             self.postMessage({ type: 'ready', backend });
             return;
         } catch (err) {
-            if (session) { try { session.release(); } catch {} session = null; }
+            if (s) { try { s.release(); } catch {} }
+            fallbackReason = (err && err.message) || String(err);
+            console.warn('[NextGenUp] WebGPU failed, falling back to WASM:', err);
         }
+    } else {
+        fallbackReason = 'No WebGPU adapter available';
     }
 
-    throw new Error('No working inference backend found');
+    useSession(await createSession('wasm'), 'wasm');
+    self.postMessage({ type: 'ready', backend, fallbackReason });
+}
+
+// A GPU can still fail mid-run (device lost, out of memory on a big frame).
+// Switch to WASM once and redo the frame instead of failing the whole job.
+async function handleFrameSafe(msg) {
+    try {
+        await handleFrame(msg);
+    } catch (err) {
+        if (backend !== 'webgpu') throw err;
+        const reason = (err && err.message) || String(err);
+        console.warn('[NextGenUp] WebGPU failed during upscaling, switching to WASM:', err);
+        try { session.release(); } catch {}
+        session = null;
+        useSession(await createSession('wasm'), 'wasm');
+        self.postMessage({ type: 'backendChanged', backend, reason });
+        await handleFrame(msg);
+    }
 }
 
 async function handleFrame(msg) {

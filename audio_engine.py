@@ -32,9 +32,11 @@ _infer_lock = threading.Lock()
 def _ffmpeg():
     exe = 'ffmpeg.exe' if sys.platform == 'win32' else 'ffmpeg'
     if paths.EXE_DIR:
-        p = os.path.join(paths.EXE_DIR, exe)
-        if os.path.isfile(p):
-            return p
+        # Linux packages ship 'nextgenup-ffmpeg' (issue #7); others 'ffmpeg'
+        for cand in ('nextgenup-' + exe, exe):
+            p = os.path.join(paths.EXE_DIR, cand)
+            if os.path.isfile(p):
+                return p
     # Dev mode: prefer the static build vendored for the desktop app —
     # system ffmpeg installs (e.g. Anaconda's) can be dynamic or crippled
     import glob

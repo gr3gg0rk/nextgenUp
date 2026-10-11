@@ -83,6 +83,17 @@ fn spawn_update_check(handle: tauri::AppHandle) {
 }
 
 fn main() {
+    // Linux only (compiled out on macOS and Windows): WebKitGTK's DMA-BUF
+    // renderer aborts on some Fedora/NVIDIA setups with "Could not create
+    // surfaceless EGL display: EGL_BAD_ALLOC" (issue #8). Must be set before
+    // the webview starts; a value the user set themselves is respected.
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
