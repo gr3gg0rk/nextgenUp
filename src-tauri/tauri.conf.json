@@ -51,7 +51,8 @@
       "binaries/ffprobe"
     ],
     "macOS": {
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-"
     },
     "windows": {
       "nsis": {

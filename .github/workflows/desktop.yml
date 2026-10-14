@@ -2,7 +2,10 @@ name: Desktop builds
 
 on:
   push:
-    tags: ["v*"]
+    # Only real version tags (v1.2.1). A loose "v*" also matched a renamed
+    # archive tag (v1.2.0-archive), rebuilt it, and overwrote its assets,
+    # which reset their download counts.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
 
 # tauri-action needs to create the release and upload assets
