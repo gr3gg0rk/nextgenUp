@@ -1,6 +1,6 @@
 [package]
 name = "nextgenup"
-version = "1.2.0"
+version = "1.2.1"
 description = "NextGenUp — AI image & video upscaling"
 authors = ["Ripon Chandra Malo"]
 license = "MIT"
