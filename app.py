@@ -19,7 +19,7 @@ from flask import Flask, Response, jsonify, render_template, request, send_file
 
 import paths
 
-VERSION = '1.2.1'
+VERSION = '1.2.2'
 
 try:
     import ai_engine

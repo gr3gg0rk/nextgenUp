@@ -54,10 +54,18 @@ Every installer is fully self-contained — the AI engine, FFmpeg, and the upsca
 
 macOS note: builds are not notarized with Apple, so the first launch needs one approval. Open the app once, then go to **System Settings > Privacy & Security** and click **Open Anyway**.
 
-If macOS says the app **"is damaged and can't be opened"** (Apple Silicon Macs with version 1.2.0 or earlier), the download is fine: those builds had an incomplete signature. Move the app to Applications, then run this once in Terminal:
+Two older versions need a one-time Terminal fix on Apple Silicon Macs. Version 1.2.2 and newer need neither.
+
+- **"NextGenUp is damaged and can't be opened"** (version 1.2.0 or earlier): the download is fine, those builds had an incomplete signature. Move the app to Applications, then run this once:
 
 ```bash
 xattr -cr /Applications/NextGenUp.app
+```
+
+- **The window opens but stays on "Starting NextGenUp..." and says the local engine did not start** (version 1.2.1 only): run this once, then open the app again:
+
+```bash
+codesign --force --deep --sign - /Applications/NextGenUp.app
 ```
 
 ## Demo video
