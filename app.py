@@ -41,10 +41,14 @@ except Exception:
 
 try:
     import model_store
+except Exception as e:
+    print(f'[startup] model registry unavailable: {e}', flush=True)
+    model_store = None
+
+try:
     import restore_engine
 except Exception as e:
     print(f'[startup] restore tools unavailable: {e}', flush=True)
-    model_store = None
     restore_engine = None
 
 try:
@@ -58,6 +62,19 @@ try:
 except Exception as e:
     print(f'[startup] video tools unavailable: {e}', flush=True)
     video_tools = None
+
+try:
+    import engine_env
+except Exception as e:
+    print(f'[startup] GPU engine env unavailable: {e}', flush=True)
+    engine_env = None
+
+try:
+    import gpu_runner
+except Exception as e:
+    print(f'[startup] GPU runner unavailable: {e}', flush=True)
+    gpu_runner = None
+
 
 def _find_bin(name):
     """Find a binary next to the packaged executable, in PATH, or in
@@ -107,6 +124,95 @@ app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2GB
 tasks = {}
 # Live subprocess handles per task, so cancel can kill them (not persisted)
 _procs = {}
+
+# Engine install/update jobs (same shape as `tasks` entries), so progress
+# is visible while `uv` sets up the CUDA environment
+engine_tasks = {}
+
+# Per-task cancel Events handed to gpu_runner.run; the existing
+# /api/cancel/<task_id> endpoint flips these to kill the runner process
+gpu_cancels = {}
+
+
+def _engine_task_progress(task_key):
+    """Progress callback -> engine_tasks[task_key] updates."""
+    def cb(pct, msg=''):
+        task = engine_tasks.setdefault(
+            task_key, {'status': 'processing', 'progress': 0,
+                       'message': '', 'error': None})
+        task['progress'] = max(task.get('progress', 0), int(pct))
+        if msg:
+            task['message'] = msg
+    return cb
+
+
+def _engine_unavailable_reason():
+    if engine_env is None:
+        return 'engine_env module not available'
+    return None
+
+
+def _gpu_info():
+    """GPU block for /api/capabilities (nulls when engine_env is absent)."""
+    reason = _engine_unavailable_reason()
+    if reason:
+        return {'available': False, 'name': None, 'vram_gb': None,
+                'reason': reason}
+    try:
+        info = engine_env.gpu_info() or {}
+    except Exception as e:
+        return {'available': False, 'name': None, 'vram_gb': None,
+                'reason': str(e)[:200]}
+    return {'available': bool(info.get('available')),
+            'name': info.get('name'),
+            'vram_gb': info.get('vram_gb')}
+
+
+def _engine_installed(engine):
+    """Best-effort per-engine install check via engine_env."""
+    if engine_env is None:
+        return False
+    f = getattr(engine_env, '_installed', None)
+    if f is None:
+        return False
+    try:
+        return bool(f(engine))
+    except Exception:
+        return False
+
+
+def _engines_overview():
+    """Install state per known engine (from registry + engine specs)."""
+    engines = {}
+    if engine_env is not None:
+        specs = getattr(engine_env, 'ENGINE_SPECS', {}) or {}
+        for name in specs:
+            engines[name] = {'installed': _engine_installed(name)}
+    for m in (model_store.list_models() if model_store else []):
+        engines.setdefault(m['engine'], {'installed': _engine_installed(m['engine'])})
+    return engines
+
+
+def _model_view(m):
+    """Registry entry merged with download state + GPU availability."""
+    view = dict(m)
+    key = m['key']
+    state = model_store.status(key)
+    view.update(status=state['status'], progress=state['progress'],
+                error=state['error'], available=state['available'],
+                size=state['size'])
+    if model_store.is_gpu(key):
+        gpu = _gpu_info()
+        engine_ready = _engine_installed(m['engine'])
+        reason = None
+        if not gpu['available']:
+            reason = gpu.get('reason') or 'no CUDA GPU'
+        elif not engine_ready:
+            reason = 'engine not installed'
+        view['gpu'] = {'available': bool(gpu['available'] and engine_ready),
+                       'reason': reason}
+    return view
+
 
 # Per-session token for file-writing endpoints. It is embedded in the page,
 # so only same-origin scripts can read it, and it travels in a custom header,
@@ -234,9 +340,15 @@ def llms_txt():
 
 @app.route('/api/capabilities')
 def capabilities():
+    gpu = _gpu_info()
+    gpu_models = [m['key'] for m in (model_store.list_models() if model_store else [])
+                  if model_store.is_gpu(m['key'])]
     return jsonify({'server_ai': SERVER_AI, 'face_restore': FACE_RESTORE,
                     'ffmpeg': FFMPEG_OK, 'version': VERSION,
-                    'bg_remove': bool(bg_remove and bg_remove.available())})
+                    'bg_remove': bool(bg_remove and bg_remove.available()),
+                    'gpu': gpu,
+                    'engines': _engines_overview(),
+                    'gpu_models': gpu_models})
 
 
 # Domains the About dialog may open in the system browser. The desktop
@@ -496,6 +608,9 @@ def cancel_task(task_id):
     proc = _procs.get(task_id)
     if proc and proc.poll() is None:
         proc.kill()
+    cancel = gpu_cancels.get(task_id)
+    if cancel:
+        cancel.set()
     return jsonify({'status': 'cancelling'})
 
 
@@ -641,11 +756,23 @@ def image_upscale():
     if mode in ('ai', 'ai-enhance') and not SERVER_AI:
         return jsonify({'error': 'Server AI not available on this host'}), 400
 
+    model_key = data.get('model')
+    if (mode == 'ai' and model_key and model_store
+            and model_store.valid(model_key)):
+        if not model_store.is_gpu(model_key):
+            return jsonify({'error': 'Model is not a GPU model'}), 400
+        if not gpu_runner:
+            return jsonify({'error': 'GPU runner unavailable'}), 503
+
     task['status'] = 'processing'
     task['progress'] = 10
     task['message'] = 'Starting upscale...'
 
-    if mode in ('ai', 'ai-enhance'):
+    if mode == 'ai' and model_key and model_store and model_store.valid(model_key) \
+            and model_store.is_gpu(model_key):
+        target = _run_image_upscale_gpu
+        args = (task_id, model_key, scale)
+    elif mode in ('ai', 'ai-enhance'):
         face = bool(data.get('face_restore')) and FACE_RESTORE
         target = _run_image_upscale_ai
         args = (task_id, scale, mode == 'ai-enhance', face)
@@ -703,6 +830,104 @@ def models_endpoint(key):
     if request.method == 'POST':
         model_store.start_download(key)
     return jsonify(model_store.status(key))
+
+
+# --- Model registry: merged listing + management actions ---
+
+@app.route('/api/models', methods=['GET', 'POST'])
+def models_registry():
+    """GET: full registry with download state + GPU availability.
+
+    POST body: {action: 'download'|'update'|'remove'|'add', key,
+                model?: <new model definition for 'add'>}
+    """
+    if not model_store:
+        return jsonify({'error': 'Model registry unavailable'}), 500
+    if request.method == 'GET':
+        return jsonify({'models': [_model_view(m)
+                                   for m in model_store.list_models()]})
+    data = request.json or {}
+    action = data.get('action')
+    key = data.get('key')
+    try:
+        if action == 'download':
+            if not key or not model_store.valid(key):
+                return jsonify({'error': 'Unknown model'}), 404
+            model_store.start_download(key)
+        elif action == 'update':
+            if not key or not model_store.valid(key):
+                return jsonify({'error': 'Unknown model'}), 404
+            if not model_store.update(key):
+                return jsonify({'status': 'ok', 'updated': False,
+                                'reason': 'revision pinned or unchanged'})
+            return jsonify({'status': 'ok', 'updated': True})
+        elif action == 'remove':
+            if not key or not model_store.valid(key):
+                return jsonify({'error': 'Unknown model'}), 404
+            model_store.remove(key)
+        elif action == 'add':
+            model = data.get('model') or {}
+            if key:
+                model.setdefault('key', key)
+            entry = model_store.add(model)
+            return jsonify({'status': 'ok', 'model': entry})
+        else:
+            return jsonify({'error': f'Unknown action: {action}'}), 400
+    except (ValueError, KeyError, RuntimeError) as e:
+        return jsonify({'error': str(e)}), 400
+    return jsonify({'status': 'ok'})
+
+
+# --- Engine environment management ---
+
+@app.route('/api/engine', methods=['GET', 'POST'])
+def engine_endpoint():
+    """GET: engine env status + active install/update progress.
+
+    POST body: {action: 'install'|'update', engine?: <name>}
+    Progress is visible in the returned `task` block (and survives
+    polling until a new job starts).
+    """
+    reason = _engine_unavailable_reason()
+    if reason:
+        return jsonify({'available': False, 'status': {}, 'task': None,
+                        'error': reason}), 503
+    if request.method == 'POST':
+        data = request.json or {}
+        action = data.get('action')
+        engine = data.get('engine')
+        fn = {'install': getattr(engine_env, 'ensure_installed', None),
+              'update': getattr(engine_env, 'update', None)}.get(action)
+        if fn is None:
+            return jsonify({'error': f'Unknown action: {action}'}), 400
+        task_key = data.get('task_id') or 'engine'
+        existing = engine_tasks.get(task_key)
+        if existing and existing.get('status') == 'processing':
+            return jsonify({'error': 'Engine job already running'}), 409
+        engine_tasks[task_key] = {'status': 'processing', 'progress': 0,
+                                  'message': 'Starting...', 'error': None}
+        kwargs = {'progress_cb': _engine_task_progress(task_key)}
+        if engine:
+            kwargs['engine'] = engine
+
+        def _run():
+            try:
+                fn(**kwargs)
+                engine_tasks[task_key].update(status='completed',
+                                              progress=100, message='Done!')
+            except Exception as e:
+                engine_tasks[task_key].update(status='error',
+                                              error=str(e)[:200])
+                print(f'[engine] {action} failed: {e}', flush=True)
+        threading.Thread(target=_run, daemon=True).start()
+        return jsonify({'status': 'processing', 'task_id': task_key})
+    try:
+        status = engine_env.status() or {}
+    except Exception as e:
+        status = {'error': str(e)[:200]}
+    return jsonify({'available': True, 'status': status,
+                    'task': engine_tasks.get('engine'),
+                    'engines': _engines_overview()})
 
 
 def _start_tool_thread(task_id, runner, *args):
@@ -1552,6 +1777,189 @@ def _run_image_upscale(task_id, scale):
         task['status'] = 'error'
         task['message'] = str(e)
     save_task(task_id)
+
+
+def _gpu_weights_dir(key):
+    """Explicit weights dir for a registry model (contract: prefer
+    --weights-dir). Snapshot repos get models/<key>/, legacy flat files
+    share models/."""
+    entry = model_store.get(key) if model_store else None
+    if entry and entry.get('source', {}).get('type') == 'hf' \
+            and not entry['source'].get('file'):
+        return paths.data(os.path.join('models', key))
+    return paths.data('models')
+
+
+def _gpu_task_progress(task):
+    """Map gpu_runner 0-99 progress into a task dict."""
+    def cb(pct, message=''):
+        task['progress'] = max(task.get('progress', 0),
+                               10 + int(max(0, min(pct, 99)) * 0.85))
+        if message:
+            task['message'] = message
+    return cb
+
+
+def _ensure_engine(task, engine):
+    """Install the engine venv on first use, surfacing progress."""
+    ensure = getattr(engine_env, 'ensure_installed', None)
+    if ensure is None:
+        return
+    ensure(engine, progress_cb=lambda p, m='': (
+        task.__setitem__('message', m or 'Setting up GPU engine...'),
+        task.__setitem__('progress', max(task.get('progress', 0),
+                                         min(10, int(p * 0.1))))))
+
+
+def _run_image_upscale_gpu(task_id, key, scale):
+    """GPU image upscale via engine_runner (contract §3/§4)."""
+    task = tasks[task_id]
+    input_path = task['input']
+    output_path = os.path.join(app.config['OUTPUT_FOLDER'],
+                               f'{task_id}_upscaled.png')
+    entry = model_store.get(key)
+    engine = entry['engine']
+    options = dict(entry.get('options') or {})
+    options.setdefault('scale', scale)
+    cancel = threading.Event()
+    gpu_cancels[task_id] = cancel
+    try:
+        _ensure_engine(task, engine)
+        task['message'] = 'Running GPU model...'
+        gpu_runner.run(engine, _gpu_weights_dir(key), input_path,
+                       output_path, options,
+                       progress_cb=_gpu_task_progress(task),
+                       cancel_event=cancel)
+        info = get_image_info(output_path) or {}
+        task['status'] = 'completed'
+        task['progress'] = 100
+        task['output'] = output_path
+        task['message'] = 'Done!'
+        task['output_width'] = info.get('width')
+        task['output_height'] = info.get('height')
+    except gpu_runner.GPUBusyError:
+        task['status'] = 'error'
+        task['message'] = 'GPU is busy with another job — try again shortly'
+    except gpu_runner.EngineError as e:
+        if cancel.is_set() or 'cancel' in str(e).lower():
+            task['status'] = 'cancelled'
+            task['message'] = 'Cancelled'
+        else:
+            task['status'] = 'error'
+            task['message'] = _gpu_error_msg(e)
+    except Exception as e:
+        task['status'] = 'error'
+        task['message'] = _gpu_error_msg(e)
+    finally:
+        gpu_cancels.pop(task_id, None)
+    save_task(task_id)
+
+
+def _gpu_error_msg(e):
+    """Human-readable GPU job error, flagging host security policy."""
+    msg = str(e)
+    if 'application control' in msg.lower() or '0x800711c7' in msg.lower():
+        return ('Blocked by Windows Smart App Control (host security '
+                'policy) — allow the engine interpreter/DLL and retry')
+    return f'GPU error: {msg[:200]}'
+
+
+MAX_VIDEO_WIDTH = 3840  # 4K cap
+
+
+def _run_video_upscale_model(task_id, key, extra_options):
+    """Whole-clip GPU video upscale: runner upscales, ffmpeg muxes the
+    original audio back (-c:a copy), honoring the 4K cap."""
+    task = tasks[task_id]
+    input_path = task['input']
+    raw_path = os.path.join(app.config['OUTPUT_FOLDER'],
+                            f'{task_id}_gpu_raw.mp4')
+    output_path = os.path.join(app.config['OUTPUT_FOLDER'],
+                               f'{task_id}_upscaled.mp4')
+    entry = model_store.get(key)
+    engine = entry['engine']
+    options = dict(entry.get('options') or {})
+    options.update(extra_options or {})
+
+    info = task.get('info') or {}
+    width = info.get('width') or 0
+    scale = int(options.get('scale') or entry.get('scale') or 4)
+    if width and width * scale > MAX_VIDEO_WIDTH:
+        scale = max(1, MAX_VIDEO_WIDTH // width)
+    options['scale'] = scale
+
+    cancel = threading.Event()
+    gpu_cancels[task_id] = cancel
+    try:
+        _ensure_engine(task, engine)
+        task['message'] = 'Running GPU model on video...'
+        gpu_runner.run(engine, _gpu_weights_dir(key), input_path,
+                       raw_path, options,
+                       progress_cb=_gpu_task_progress(task),
+                       cancel_event=cancel)
+        # mux original audio back (video-only runner output); the `?`
+        # makes the audio stream optional for silent inputs
+        task['progress'] = max(task['progress'], 95)
+        task['message'] = 'Muxing audio...'
+        cmd = [FFMPEG, '-y', '-i', raw_path, '-i', input_path,
+               '-map', '0:v:0', '-map', '1:a:0?',
+               '-c:v', 'copy', '-c:a', 'copy', '-shortest',
+               output_path]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0 or not os.path.exists(output_path):
+            raise RuntimeError(
+                f'audio mux failed: {proc.stderr[-300:]}')
+        os.remove(raw_path)
+        task['status'] = 'completed'
+        task['progress'] = 100
+        task['output'] = output_path
+        task['message'] = 'Done!'
+    except gpu_runner.GPUBusyError:
+        task['status'] = 'error'
+        task['message'] = 'GPU is busy with another job — try again shortly'
+    except gpu_runner.EngineError as e:
+        if cancel.is_set() or 'cancel' in str(e).lower():
+            task['status'] = 'cancelled'
+            task['message'] = 'Cancelled'
+        else:
+            task['status'] = 'error'
+            task['message'] = _gpu_error_msg(e)
+    except Exception as e:
+        task['status'] = 'error'
+        task['message'] = _gpu_error_msg(e)
+    finally:
+        gpu_cancels.pop(task_id, None)
+    save_task(task_id)
+
+
+@app.route('/api/video/upscale-model', methods=['POST'])
+def video_upscale_model():
+    """Whole-clip server-side video upscale with a GPU registry model.
+    Body: {task_id, model, options?}. Progress streams via
+    /api/progress/<task_id>; cancel via /api/cancel/<task_id>."""
+    data = request.json or {}
+    task_id = data.get('task_id')
+    model_key = data.get('model')
+    task = tasks.get(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    if not model_store or not model_store.valid(model_key or ''):
+        return jsonify({'error': 'Unknown model'}), 400
+    if not model_store.is_gpu(model_key):
+        return jsonify({'error': 'Model is not a GPU model'}), 400
+    if not gpu_runner:
+        return jsonify({'error': 'GPU runner unavailable'}), 503
+    gpu = _gpu_info()
+    if not gpu.get('available'):
+        return jsonify({'error': 'No CUDA GPU available',
+                        'reason': gpu.get('reason')}), 400
+    task['status'] = 'processing'
+    task['progress'] = 5
+    task['message'] = 'Starting GPU upscale...'
+    threading.Thread(target=_run_video_upscale_model,
+                     args=(task_id, model_key, data.get('options') or {}),
+                     daemon=True).start()
+    return jsonify({'status': 'processing'})
 
 
 def _run_image_upscale_ai(task_id, scale, enhance=False, face=False):
