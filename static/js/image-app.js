@@ -72,9 +72,80 @@
     const batchModeSel = $('#batch-mode');
     const batchProgressLabel = $('#batch-progress-label');
 
+    // --- GPU model select (Ultra mode) ---
+    const imgModelSelect = $('#img-model-select');
+    const imgModelGroup = $('#img-model-group');
+    const imgModelHint = $('#img-model-hint');
+    let imageModels = [];       // /api/models kind == 'image-sr'
+    let gpuCaps = null;         // capabilities.gpu block
+
+    function selectedImgModelKey() {
+        return imgModelSelect && imgModelSelect.value ? imgModelSelect.value : null;
+    }
+
+    function selectedImgModel() {
+        const key = selectedImgModelKey();
+        return key ? imageModels.find((m) => m.key === key) : null;
+    }
+
+    async function initModelSelect() {
+        if (!imgModelSelect || !window.NGUModels) return;
+        try {
+            const [models, caps] = await Promise.all([
+                window.NGUModels.getModels(),
+                window.NGUModels.getCapabilities(),
+            ]);
+            imageModels = models.filter((m) => m.kind === 'image-sr');
+            gpuCaps = (caps && caps.gpu) || null;
+            imgModelSelect.innerHTML = '';
+            const bundled = document.createElement('option');
+            bundled.value = '';
+            bundled.textContent = 'Real-ESRGAN x4v3 (bundled)';
+            imgModelSelect.appendChild(bundled);
+            imageModels.forEach((m) => {
+                const opt = document.createElement('option');
+                opt.value = m.key;
+                const unavailable = m.gpu && !m.gpu.available;
+                opt.textContent = (m.label || m.key) + (unavailable ? ' — unavailable' : '');
+                if (unavailable) opt.disabled = true;
+                imgModelSelect.appendChild(opt);
+            });
+            updateModelUI();
+        } catch (e) {
+            // Registry not reachable — Ultra falls back to the bundled model.
+            console.warn('model list unavailable', e);
+        }
+    }
+
+    function updateModelUI() {
+        if (!imgModelGroup) return;
+        const ultra = imgState.selectedMode === 'ultra';
+        imgModelGroup.classList.toggle('hidden', !ultra);
+        if (!ultra) return;
+        const m = selectedImgModel();
+        const isGpu = !!m;
+        const reason = gpuCaps && !gpuCaps.available ? (gpuCaps.reason || 'No CUDA GPU available') : null;
+        imgModelSelect.disabled = !!reason;
+        imgModelSelect.title = reason || '';
+        imgModelHint.textContent = reason
+            ? ('GPU unavailable: ' + reason)
+            : (isGpu
+                ? 'Runs on the server GPU. Face restore (GFPGAN) is only available with the bundled model.'
+                : '');
+        // Face restore is a legacy GFPGAN passthrough — GPU models can't use it.
+        const faceCheck = $('#face-restore-check');
+        if (faceCheck) {
+            faceCheck.disabled = isGpu && !reason;
+            const faceLabel = faceCheck.closest('.face-toggle');
+            if (faceLabel) faceLabel.style.opacity = (isGpu && !reason) ? '0.4' : '';
+            if (isGpu && !reason) faceCheck.checked = false;
+        }
+    }
+
     // --- Init ---
     bindImageEvents();
     initCompareSlider();
+    initModelSelect();
 
     function bindImageEvents() {
         imgDropzone.addEventListener('click', () => imgFileInput.click());
@@ -200,7 +271,10 @@
         // Face restoration runs on the server — only offered in Ultra mode
         const faceGroup = $('#face-restore-group');
         if (faceGroup) faceGroup.classList.toggle('hidden', imgState.selectedMode !== 'ultra');
+        updateModelUI();
     }
+
+    if (imgModelSelect) imgModelSelect.addEventListener('change', updateModelUI);
 
     function updateImgOutputRes() {
         if (!imgState.imageInfo) return;
@@ -346,6 +420,7 @@
             updateImgProgress({ progress: 15, message: 'Processing on server...' }, startTime);
 
             const faceCheck = $('#face-restore-check');
+            const modelKey = selectedImgModelKey();
             const upRes = await fetch('/api/image/upscale', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -353,7 +428,10 @@
                     task_id: data.task_id,
                     scale: imgState.selectedScale,
                     mode: serverMode,
-                    face_restore: !!(serverMode === 'ai' && faceCheck && faceCheck.checked),
+                    // GPU model key — legacy bundled path when null
+                    model: modelKey,
+                    // GFPGAN passthrough is legacy-only
+                    face_restore: !!(serverMode === 'ai' && !modelKey && faceCheck && faceCheck.checked),
                 }),
             });
             if (!upRes.ok) {
@@ -747,7 +825,7 @@
                         item.blob = await imageDataToBlob(data);
                     } else {
                         item.blob = await serverProcessToBlob(item.file, mode === 'ultra' ? 'ai' : 'ffmpeg', scale,
-                            (pct) => setItemStatus(item, 'working', pct + '%'));
+                            (pct) => setItemStatus(item, 'working', pct + '%'), selectedImgModelKey());
                     }
                     setItemStatus(item, 'done', 'done');
                     addItemDownloadLink(item);
@@ -783,7 +861,7 @@
         }
     }
 
-    async function serverProcessToBlob(file, serverMode, scale, onPct) {
+    async function serverProcessToBlob(file, serverMode, scale, onPct, modelKey) {
         const formData = new FormData();
         formData.append('image', file);
         const res = await fetch('/api/image/upload', { method: 'POST', body: formData });
@@ -791,10 +869,12 @@
         if (!res.ok) throw new Error(data.error || 'Upload failed');
         batch.currentTaskId = data.task_id;
 
+        const body = { task_id: data.task_id, scale, mode: serverMode };
+        if (serverMode === 'ai' && modelKey) body.model = modelKey;
         const upRes = await fetch('/api/image/upscale', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ task_id: data.task_id, scale, mode: serverMode }),
+            body: JSON.stringify(body),
         });
         if (!upRes.ok) {
             const err = await upRes.json().catch(() => ({}));

@@ -212,6 +212,14 @@
                     </svg>
                     <span>Video Tools</span>
                 </button>
+                <span class="nav-section">AI Models</span>
+                <button class="nav-item" data-tab="models" id="nav-models">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+                    </svg>
+                    <span>AI Models</span>
+                </button>
             </nav>
             <div class="sidebar-footer">
                 <a href="https://github.com/riponcm/nextgenUp" class="sidebar-star ext-link" title="Star NextGenUp on GitHub">
@@ -383,6 +391,11 @@
                             </label>
                         </div>
                         {% endif %}
+                        <div class="option-group hidden" id="img-model-group">
+                            <label>AI Model</label>
+                            <select id="img-model-select" class="batch-select" title=""></select>
+                            <span class="model-hint" id="img-model-hint"></span>
+                        </div>
                         <button class="upscale-btn" id="img-upscale-btn">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
@@ -603,10 +616,30 @@
                             </div>
                             <div class="pro-warning hidden" id="pro-warning"></div>
                         </div>
+                        <div class="mode-card hidden" data-mode="gpumodel" id="mode-gpumodel">
+                            <div class="mode-icon ultra-icon">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="7" width="18" height="10" rx="2"/><circle cx="9" cy="12" r="2.5"/><line x1="15" y1="10" x2="17" y2="10"/><line x1="15" y1="14" x2="17" y2="14"/>
+                                </svg>
+                            </div>
+                            <div class="mode-info">
+                                <h3>Model (GPU)</h3>
+                                <p>Server-side AI model &bull; Whole clip</p>
+                                <div class="mode-tags">
+                                    <span class="tag tag-ai">AI Quality</span>
+                                    <span class="tag tag-gpu">CUDA GPU</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Options Row -->
                     <div class="options-row">
+                        <div class="option-group hidden" id="gpu-model-group">
+                            <label>GPU Model</label>
+                            <select id="gpu-model-select" class="batch-select"></select>
+                            <span class="model-hint" id="gpu-model-hint"></span>
+                        </div>
                         <div class="option-group">
                             <label>Scale Factor</label>
                             <div class="scale-buttons" id="scale-buttons">
@@ -1666,6 +1699,41 @@
                 </section>
             </main>
 
+            <!-- ===================== AI MODELS TAB ===================== -->
+            <main class="tab-content" id="tab-models">
+                <div class="models-header">
+                    <div>
+                        <h2>AI Models</h2>
+                        <p class="models-sub">Download, update and manage the AI models used across the app</p>
+                    </div>
+                    <div class="models-header-actions">
+                        <div id="gpu-engine-panel" class="gpu-engine-panel hidden">
+                            <span id="gpu-engine-info" class="gpu-engine-info"></span>
+                            <button class="model-btn hidden" id="gpu-engine-install-btn">Install GPU engine</button>
+                            <div id="gpu-engine-progress" class="hidden" style="width:100%">
+                                <div class="model-progress-track">
+                                    <div class="model-progress-fill" id="gpu-engine-progress-fill" style="width:0%"></div>
+                                </div>
+                                <span class="model-progress-text" id="gpu-engine-progress-text"></span>
+                            </div>
+                        </div>
+                        <button class="model-btn" id="models-refresh-btn">Refresh</button>
+                    </div>
+                </div>
+                <div class="model-group" id="models-group-image">
+                    <h3 class="model-group-title">Image Models</h3>
+                    <div class="model-list" id="models-image-list"></div>
+                </div>
+                <div class="model-group" id="models-group-video">
+                    <h3 class="model-group-title">Video Models</h3>
+                    <div class="model-list" id="models-video-list"></div>
+                </div>
+                <div class="model-group" id="models-group-audio">
+                    <h3 class="model-group-title">Audio &amp; Utility Models</h3>
+                    <div class="model-list" id="models-audio-list"></div>
+                </div>
+            </main>
+
         </div><!-- /content-area -->
     </div><!-- /app-layout -->
 
@@ -1683,6 +1751,7 @@
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="/static/js/pro-upscaler.js"></script>
+    <script src="/static/js/models-app.js"></script>
     <script src="/static/js/app.js"></script>
     <script src="/static/js/image-app.js"></script>
     <script src="/static/js/bg-app.js"></script>

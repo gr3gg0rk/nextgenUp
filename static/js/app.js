@@ -202,6 +202,7 @@
                 document.querySelectorAll('.mode-card').forEach((c) => c.classList.remove('selected'));
                 card.classList.add('selected');
                 state.selectedMode = card.dataset.mode;
+                updateVideoModeUI();
                 updateOutputRes();
             });
         });
@@ -242,6 +243,63 @@
             });
         });
     }
+
+    // --- GPU model mode (capabilities-driven) ---
+    let gpuVideoModels = [];
+
+    async function initGpuModelMode() {
+        if (!window.NGUModels) return;
+        try {
+            const [models, caps] = await Promise.all([
+                window.NGUModels.getModels(),
+                window.NGUModels.getCapabilities(),
+            ]);
+            const gpuModels = (caps && caps.gpu_models) || [];
+            if (!gpuModels.length) return;      // no GPU models — keep the chip hidden
+            gpuVideoModels = models.filter((m) => m.kind === 'video-sr' && gpuModels.includes(m.key));
+            if (!gpuVideoModels.length) return;
+            const card = $('#mode-gpumodel');
+            if (card) card.classList.remove('hidden');
+            const sel = $('#gpu-model-select');
+            if (sel) {
+                sel.innerHTML = '';
+                gpuVideoModels.forEach((m) => {
+                    const opt = document.createElement('option');
+                    opt.value = m.key;
+                    opt.textContent = m.label || m.key;
+                    sel.appendChild(opt);
+                });
+                sel.addEventListener('change', updateGpuModelHint);
+                updateGpuModelHint();
+            }
+        } catch (e) {
+            console.warn('GPU model mode unavailable', e);
+        }
+    }
+
+    const GPU_MODEL_HINTS = {
+        'seedvr2-3b': 'Restores detail, slow (~minutes per 5s clip), audio preserved',
+        'ltxv-upscaler': 'Fast 2x spatial upscale, cleaner look on AI-generated footage; audio preserved',
+    };
+
+    function updateGpuModelHint() {
+        const sel = $('#gpu-model-select');
+        const hint = $('#gpu-model-hint');
+        if (!sel || !hint) return;
+        const key = sel.value;
+        hint.textContent = GPU_MODEL_HINTS[key] ||
+            ((gpuVideoModels.find((m) => m.key === key) || {}).label) || '';
+        const caps = sel.selectedOptions[0];
+        hint.title = caps ? caps.textContent : '';
+    }
+
+    function updateVideoModeUI() {
+        const gpuGroup = $('#gpu-model-group');
+        if (gpuGroup) gpuGroup.classList.toggle('hidden', state.selectedMode !== 'gpumodel');
+    }
+
+    // --- Sidebar-free init hook ---
+    initGpuModelMode();
 
     function isValidVideo(file) {
         return (file.type.startsWith('video/') || file.name.match(/\.(mp4|mov|webm|mkv|avi)$/i))
@@ -354,9 +412,62 @@
 
         if (state.selectedMode === 'basic') {
             await runBasicUpscale(startTime);
+        } else if (state.selectedMode === 'gpumodel') {
+            await runGpuModelUpscale(startTime);
         } else {
             await runProUpscale(startTime);
         }
+    }
+
+    // --- GPU Model Mode (server-side whole-clip upscale) ---
+    async function runGpuModelUpscale(startTime) {
+        try {
+            const modelSel = $('#gpu-model-select');
+            const model = modelSel ? modelSel.value : null;
+            if (!model) throw new Error('No GPU model selected');
+            const res = await fetch('/api/video/upscale-model', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    task_id: state.taskId,
+                    model,
+                    options: { scale: state.selectedScale },
+                }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to start GPU upscale');
+            }
+            watchServerProgress(startTime);
+        } catch (err) {
+            onUpscaleError(err.message);
+        }
+    }
+
+    // Shared SSE progress watcher (Basic + GPU model modes)
+    function watchServerProgress(startTime) {
+        const evtSource = new EventSource(`/api/progress/${state.taskId}`);
+        evtSource.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            updateProgress(data, startTime);
+
+            if (data.status === 'completed') {
+                evtSource.close();
+                onUpscaleComplete();
+            } else if (data.status === 'cancelled') {
+                evtSource.close();
+                onUpscaleCancelled();
+            } else if (data.status === 'error') {
+                evtSource.close();
+                onUpscaleError(data.message);
+            }
+        };
+        evtSource.onerror = () => {
+            // The event stream can drop during long encodes while the server
+            // keeps working — switch to polling instead of failing.
+            evtSource.close();
+            pollVideoProgress(startTime);
+        };
     }
 
     // --- Basic Mode (server-side FFmpeg) ---
@@ -368,30 +479,7 @@
                 body: JSON.stringify({ task_id: state.taskId, scale: state.selectedScale }),
             });
             if (!res.ok) throw new Error('Failed to start upscale');
-
-            // Listen to SSE progress
-            const evtSource = new EventSource(`/api/progress/${state.taskId}`);
-            evtSource.onmessage = (e) => {
-                const data = JSON.parse(e.data);
-                updateProgress(data, startTime);
-
-                if (data.status === 'completed') {
-                    evtSource.close();
-                    onUpscaleComplete();
-                } else if (data.status === 'cancelled') {
-                    evtSource.close();
-                    onUpscaleCancelled();
-                } else if (data.status === 'error') {
-                    evtSource.close();
-                    onUpscaleError(data.message);
-                }
-            };
-            evtSource.onerror = () => {
-                // The event stream can drop during long encodes while FFmpeg
-                // keeps working — switch to polling instead of failing.
-                evtSource.close();
-                pollVideoProgress(startTime);
-            };
+            watchServerProgress(startTime);
         } catch (err) {
             onUpscaleError(err.message);
         }
