@@ -332,7 +332,7 @@ def _ensure_repo(engine, spec, progress_cb=None):
     git_spec = spec.get('git')
     if not git_spec:
         return
-    dest = os.path.join(ENGINE_DIR, git_spec.get('to', 'src'),
+    dest = os.path.join(ENGINE_ROOT, git_spec.get('to', 'src'),
                         git_spec['dirname'])
     if os.path.exists(os.path.join(dest, '.git')):
         return  # already cloned at the pinned ref

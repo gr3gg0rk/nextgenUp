@@ -174,10 +174,9 @@ BUILTIN_MODELS = [
             'file': None,
             'revision': '09ced71023636e9bc8cdf9cdecfb2625d1e691e8',
             'snapshot_files': ['seedvr2_ema_3b_fp8_e4m3fn.safetensors',
-                               'ema_vae_fp16.safetensors',
-                               'pos_emb.pt', 'neg_emb.pt'],
+                               'ema_vae_fp16.safetensors'],
         },
-        'size_bytes': 3894821150,
+        'size_bytes': 3892869510,
         'options': {'dit_model': 'seedvr2_ema_3b_fp8_e4m3fn.safetensors',
                     'batch_size': 5, 'attention_mode': 'sdpa',
                     'color_correction': 'lab'},
@@ -620,6 +619,15 @@ def _download_zip(key, entry, progress):
     return revision, {src['file']: etag}
 
 
+def _remote_size(url):
+    """Content-Length via HEAD, for skip-if-complete checks."""
+    import urllib.request
+    req = urllib.request.Request(url, headers={'User-Agent': 'NextGenUp'},
+                                 method='HEAD')
+    with urllib.request.urlopen(req, timeout=30, context=_http_ctx()) as resp:
+        return int(resp.headers.get('Content-Length') or -1)
+
+
 def _download_snapshot(key, entry, progress):
     """Snapshot-style HF download into models/<key>/."""
     src = entry['source']
@@ -632,6 +640,15 @@ def _download_snapshot(key, entry, progress):
         dest = os.path.join(root, rel.replace('/', os.sep))
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         url = f"{HF}/{src['repo']}/resolve/{revision}/{rel}"
+        # Skip complete files (re-install after a registry-definition fix
+        # must not re-pull multi-GB weights).
+        try:
+            if os.path.exists(dest) and \
+                    os.path.getsize(dest) == _remote_size(url):
+                etags[rel] = None
+                continue
+        except (OSError, ValueError):
+            pass
         etags[rel] = _download_to(
             url, dest,
             lambda n: progress(_size_so_far(root)))
