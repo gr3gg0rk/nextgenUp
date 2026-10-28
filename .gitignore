@@ -49,3 +49,13 @@ package-lock.json
 # Internal marketing material — never commit
 launch-kit/
 /engine/
+
+# dev-mode data dir artifacts (cwd = NEXTGENUP_DATA in dev)
+/registry.json
+/server-*.log
+/tasks.db
+/uploads/
+/outputs/
+/frames/
+/models/
+/engine/

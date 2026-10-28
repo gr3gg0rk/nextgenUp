@@ -753,14 +753,15 @@ def image_upscale():
     if not task:
         return jsonify({'error': 'Task not found'}), 404
 
-    if mode in ('ai', 'ai-enhance') and not SERVER_AI:
+    model_key = data.get('model')
+    use_gpu_model = (mode == 'ai' and model_key and model_store
+                     and model_store.valid(model_key)
+                     and model_store.is_gpu(model_key))
+    # Legacy server AI needs the bundled ONNX; GPU models do not.
+    if mode in ('ai', 'ai-enhance') and not SERVER_AI and not use_gpu_model:
         return jsonify({'error': 'Server AI not available on this host'}), 400
 
-    model_key = data.get('model')
-    if (mode == 'ai' and model_key and model_store
-            and model_store.valid(model_key)):
-        if not model_store.is_gpu(model_key):
-            return jsonify({'error': 'Model is not a GPU model'}), 400
+    if use_gpu_model:
         if not gpu_runner:
             return jsonify({'error': 'GPU runner unavailable'}), 503
 
