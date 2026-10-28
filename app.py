@@ -325,8 +325,12 @@ def _cleanup_loop():
 @app.route('/')
 def index():
     model_exists = paths.find_model('realesr-general-x4v3.onnx') is not None
+    # Ultra mode needs either the bundled server AI or a usable GPU for the
+    # registry GPU models — the bundled ONNX alone must not gate it.
+    gpu_ok = bool(engine_env and gpu_runner and engine_env.gpu_info().get('available'))
     return render_template('index.html', model_available=model_exists,
                            server_ai=SERVER_AI, face_restore=FACE_RESTORE,
+                           ultra_visible=SERVER_AI or gpu_ok,
                            api_token=API_TOKEN)
 
 

@@ -350,7 +350,7 @@
                                 </div>
                             </div>
                         </div>
-                        {% if server_ai %}
+                        {% if ultra_visible %}
                         <div class="mode-card" data-imgmode="ultra" id="img-mode-ultra">
                             <div class="mode-icon ultra-icon">
                                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -489,7 +489,7 @@
                                 <option value="quick">Quick &mdash; browser AI</option>
                                 <option value="quality">Quality &mdash; server FFmpeg</option>
                                 <option value="enhance">Enhance &mdash; same size, AI cleanup</option>
-                                {% if server_ai %}<option value="ultra">Ultra &mdash; server AI</option>{% endif %}
+                                {% if ultra_visible %}<option value="ultra">Ultra &mdash; server AI / GPU model</option>{% endif %}
                             </select>
                         </div>
                         <div class="option-group">
