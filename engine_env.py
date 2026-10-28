@@ -58,7 +58,8 @@ _TORCH_STACK = TORCH_PINS + [
     'numpy', 'pillow',
 ]
 _TRANSFORMERS_STACK = [
-    'transformers>=4.45',
+    # <5: diffusers 0.34 imports FLAX_WEIGHTS_NAME, removed in transformers 5
+    'transformers>=4.45,<5',
     'safetensors',
     'pillow',
     'numpy',
@@ -98,22 +99,26 @@ ENGINE_SPECS = {
         'venv': 'venv',
         'deps': _TORCH_STACK + [
             'safetensors', 'numpy', 'tqdm', 'psutil', 'einops',
+            'transformers>=4.46,<5',
             'omegaconf>=2.3.0', 'diffusers>=0.33.1', 'peft>=0.17.0',
             'rotary_embedding_torch>=0.5.3', 'opencv-python', 'gguf',
             'matplotlib',
-            # inference code itself: engine/src/ComfyUI-SeedVR2_VideoUpscaler
-            # (git clone numz/ComfyUI-SeedVR2_VideoUpscaler @ 4490bd1,
-            #  Apache-2.0) — installed by the seedvr2 model installer,
-            #  not pip.
         ],
         'torch_index': True,
+        # inference code itself: cloned (not pip) by _ensure_repo
+        'git': {
+            'url': 'https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git',
+            'ref': '4490bd1f482e026674543386bb2a4d176da245b9',
+            'dirname': 'ComfyUI-SeedVR2_VideoUpscaler',
+            'to': 'src',
+        },
     },
     'ltx-upscaler': {
         'label': 'LTX video spatial upscaler (torch, CUDA)',
         'venv': 'venv',
         'deps': _TORCH_STACK + [
             'diffusers==0.34.0', 'accelerate', 'imageio', 'imageio-ffmpeg',
-            'av', 'huggingface_hub', 'transformers>=4.46',
+            'av', 'huggingface_hub', 'transformers>=4.46,<5',
         ],
         'torch_index': True,
     },
@@ -309,6 +314,37 @@ def update(engine, progress_cb=None):
         return _install_locked(engine, progress_cb, upgrade=True)
 
 
+def _git_exe():
+    import shutil
+    found = shutil.which('git')
+    if found:
+        return found
+    for cand in (r'C:\Program Files\Git\cmd\git.exe',
+                 r'C:\Program Files\Git\bin\git.exe',
+                 '/usr/bin/git', '/opt/homebrew/bin/git'):
+        if os.path.isfile(cand):
+            return cand
+    raise RuntimeError('git not found — required to fetch engine code')
+
+
+def _ensure_repo(engine, spec, progress_cb=None):
+    """Clone pinned non-pip inference code (e.g. the SeedVR2 wrapper)."""
+    git_spec = spec.get('git')
+    if not git_spec:
+        return
+    dest = os.path.join(ENGINE_DIR, git_spec.get('to', 'src'),
+                        git_spec['dirname'])
+    if os.path.exists(os.path.join(dest, '.git')):
+        return  # already cloned at the pinned ref
+    if progress_cb:
+        progress_cb(70, f'cloning {git_spec["dirname"]}')
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    git = _git_exe()
+    _run([git, 'clone', git_spec['url'], dest], progress_cb)
+    _run([git, '-C', dest, 'checkout', '--detach', git_spec['ref']],
+         progress_cb)
+
+
 def _install_locked(engine, progress_cb, upgrade):
     spec = ENGINE_SPECS[engine]
     if progress_cb:
@@ -326,6 +362,7 @@ def _install_locked(engine, progress_cb, upgrade):
     if progress_cb:
         progress_cb(30, f'installing {engine} deps')
     _pip(args, progress_cb, upgrade=upgrade)
+    _ensure_repo(engine, spec, progress_cb)
 
     versions = _collect_versions(spec)
     state = _load_state()

@@ -193,13 +193,16 @@ BUILTIN_MODELS = [
             'repo': 'Lightricks/ltxv-spatial-upscaler-0.9.7',
             'file': None,
             'revision': 'main',
-            # latent_upsampler only — the shared VAE ships with the LTX
-            # engine env, not with this model
-            'snapshot_files': ['latent_upsampler/config.json',
+            # Full pipeline folder: LTXLatentUpsamplePipeline.from_pretrained
+            # needs model_index.json + latent_upsampler/ + vae/ (the VAE is
+            # bundled in the repo, 2.49 GB — required for encode/decode).
+            'snapshot_files': ['model_index.json',
+                               'latent_upsampler/config.json',
                                'latent_upsampler/diffusion_pytorch_model.safetensors',
-                               'model_index.json'],
+                               'vae/config.json',
+                               'vae/diffusion_pytorch_model.safetensors'],
         },
-        'size_bytes': 505010137,
+        'size_bytes': 2998865579,
         'options': {'dtype': 'bf16'},
     },
 ]
@@ -223,6 +226,28 @@ def _seed():
     }
 
 
+def _merge_builtins(doc):
+    """Refresh builtin entries from BUILTIN_MODELS so app updates carry
+    corrected definitions (files, sizes, options) into existing registries.
+    Static fields come from code; dynamic state ('installed', et al.) and
+    user-added models are preserved. Returns True if the doc changed."""
+    by_key = {m.get('key'): m for m in doc.get('models', [])}
+    changed = False
+    for b in BUILTIN_MODELS:
+        cur = by_key.get(b['key'])
+        if cur is None:
+            doc['models'].append(copy.deepcopy(b))
+            changed = True
+            continue
+        for field, value in b.items():
+            if field == 'key':
+                continue
+            if cur.get(field) != value:
+                cur[field] = copy.deepcopy(value)
+                changed = True
+    return changed
+
+
 def load_registry():
     """Read registry.json, seeding it from builtins on first run."""
     with _reg_lock:
@@ -237,6 +262,8 @@ def load_registry():
                 doc = None
         if not doc or not isinstance(doc.get('models'), list):
             doc = _seed()
+            _write_registry(doc)
+        elif _merge_builtins(doc):
             _write_registry(doc)
         return doc
 
@@ -488,21 +515,46 @@ def _fetch(url, timeout=30):
     return urllib.request.urlopen(req, timeout=timeout, context=_http_ctx())
 
 
-def _download_to(url, dest, on_chunk=None):
-    """Stream url to dest(.part), returning the response ETag."""
+def _download_to(url, dest, on_chunk=None, timeout=60, max_retries=6):
+    """Stream url to dest(.part), returning the response ETag.
+
+    Network stalls are expected on multi-GB HF files: resume from the
+    .part offset via HTTP Range (206) with bounded retries instead of
+    restarting from zero."""
+    import time
+    import urllib.error
+    import urllib.request
+
     part = dest + '.part'
-    with _fetch(url) as resp:
-        etag = resp.headers.get('ETag')
-        with open(part, 'wb') as f:
-            while True:
-                chunk = resp.read(1024 * 1024)
-                if not chunk:
-                    break
-                f.write(chunk)
-                if on_chunk:
-                    on_chunk(len(chunk))
-    os.replace(part, dest)
-    return etag
+    attempt = 0
+    while True:
+        try:
+            offset = os.path.getsize(part) if os.path.exists(part) else 0
+            req = urllib.request.Request(url, headers={'User-Agent': 'NextGenUp'})
+            if offset:
+                req.add_header('Range', f'bytes={offset}-')
+            resp = urllib.request.urlopen(req, timeout=timeout,
+                                          context=_http_ctx())
+            etag = resp.headers.get('ETag')
+            if offset and getattr(resp, 'status', 206) != 206:
+                offset = 0  # server ignored Range; restart the file
+            with open(part, 'ab' if offset else 'wb') as f:
+                while True:
+                    chunk = resp.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    if on_chunk:
+                        on_chunk(len(chunk))
+            os.replace(part, dest)
+            return etag
+        except (OSError, urllib.error.URLError) as e:
+            attempt += 1
+            if attempt > max_retries:
+                raise
+            print(f'[models] download retry {attempt}/{max_retries} '
+                  f'after {type(e).__name__}: {e}', flush=True)
+            time.sleep(min(30, 3 * attempt))
 
 
 def _download_files(key, entry):
