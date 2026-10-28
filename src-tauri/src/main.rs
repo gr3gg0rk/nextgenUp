@@ -3,7 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::process::{Child, Command};
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_updater::UpdaterExt;
@@ -39,6 +39,32 @@ fn kill_server_tree(child: &mut Child) {
     let _ = child.wait();
 }
 
+// Session media must not outlive the app: uploads, results and extracted
+// video frames are transient, and tasks.db only maps task ids to those
+// files (its rows would point at deleted outputs anyway; the server
+// tolerates a missing db and recreates it on next start). models/ is kept:
+// optional AI models are expensive one-time downloads. Best effort — a
+// locked file (e.g. antivirus) must not block exit.
+fn wipe_session_files(data_dir: &std::path::Path) {
+    for name in ["uploads", "outputs", "frames"] {
+        let dir = data_dir.join(name);
+        match std::fs::remove_dir_all(&dir) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => eprintln!("failed to clear {}: {e}", dir.display()),
+        }
+        std::fs::create_dir_all(&dir).ok();
+    }
+    for db in ["tasks.db", "tasks.db-journal"] {
+        let path = data_dir.join(db);
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => eprintln!("failed to remove {}: {e}", path.display()),
+        }
+    }
+}
+
 // Check GitHub releases for a newer signed build; ask, install, restart.
 fn spawn_update_check(handle: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -71,7 +97,7 @@ fn spawn_update_check(handle: tauri::AppHandle) {
             // process as soon as the installer starts, so cleanup placed
             // after it would never run.
             if let Some(state) = handle.try_state::<ServerChild>() {
-                if let Some(mut child) = state.0.lock().unwrap().take() {
+                if let Some(mut child) = state.0.lock().take() {
                     kill_server_tree(&mut child);
                 }
             }
@@ -148,9 +174,18 @@ fn main() {
         .expect("error while building NextGenUp")
         .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
+                // Only the packaged desktop session wipes: state exists only
+                // when we spawned the sidecar. In dev mode NEXTGENUP_DATA is
+                // the repo cwd, which must not be wiped on exit.
+                let desktop_session = app.try_state::<ServerChild>().is_some();
                 if let Some(state) = app.try_state::<ServerChild>() {
-                    if let Some(mut child) = state.0.lock().unwrap().take() {
+                    if let Some(mut child) = state.0.lock().take() {
                         kill_server_tree(&mut child);
+                    }
+                }
+                if desktop_session {
+                    if let Ok(data_dir) = app.path().app_data_dir() {
+                        wipe_session_files(&data_dir);
                     }
                 }
             }
