@@ -39,6 +39,14 @@ class NotImplementedEngine(NotImplementedError):
 
 
 def _find_repo():
+    # Frozen runner: __file__ lives in the PyInstaller temp dir; resolve the
+    # clone under the app data dir via NEXTGENUP_DATA (inherited from the
+    # app), falling back to the dev-relative location.
+    data = os.environ.get('NEXTGENUP_DATA')
+    if data:
+        cand = os.path.join(data, 'engine', 'src', _REPO_DIRNAME)
+        if os.path.isdir(os.path.join(cand, 'src')):
+            return cand
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     cand = os.path.join(here, 'engine', 'src', _REPO_DIRNAME)
     return cand if os.path.isdir(os.path.join(cand, 'src')) else None
