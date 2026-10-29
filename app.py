@@ -593,7 +593,7 @@ def progress(task_id):
             if not task:
                 yield f"data: {json.dumps({'status': 'error', 'message': 'Task not found'})}\n\n"
                 break
-            yield f"data: {json.dumps({k: task[k] for k in ('status', 'progress', 'message', 'current_frame', 'total_frames')})}\n\n"
+            yield f"data: {json.dumps({k: task.get(k) for k in ('status', 'progress', 'message', 'current_frame', 'total_frames')})}\n\n"
             if task['status'] in ('completed', 'error', 'cancelled'):
                 break
             time.sleep(0.5)
