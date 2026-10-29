@@ -10,6 +10,11 @@ datas = [
     ('static/js', 'static/js'),
     ('static/favicon.png', 'static'),
     ('llms.txt', '.'),
+    # GPU runner: executed as a script by the engine venv python, so it and
+    # its engine modules must ship as data files (PyInstaller would drop
+    # them otherwise — gpu_runner only ever spawns them).
+    ('engine_runner.py', '.'),
+    ('engines', 'engines'),
 ]
 for small_model in ('realesr-general-x4v3.onnx', 'face_detection_yunet_2023mar.onnx'):
     p = os.path.join('static', 'models', small_model)

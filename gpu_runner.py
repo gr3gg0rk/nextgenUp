@@ -13,6 +13,7 @@ import subprocess
 import threading
 
 import engine_env
+import paths
 
 _LOCK = threading.Lock()
 _ACTIVE = None  # (proc, cancel_event) while a GPU job runs
@@ -57,8 +58,13 @@ def run(engine, weights_dir, input_path, output_path, options,
         exe = engine_env.python_exe()
         if not os.path.exists(exe):
             raise EngineError('engine venv not installed')
-        cmd = [exe, os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 'engine_runner.py'),
+        # Frozen: the runner ships as bundle data (see nextgenup-server.spec);
+        # dev: it sits next to this module.
+        runner = paths.resource('engine_runner.py')
+        if not os.path.exists(runner):
+            runner = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  'engine_runner.py')
+        cmd = [exe, runner,
                engine,
                '--weights-dir', weights_dir,
                '--input', input_path,

@@ -36,15 +36,20 @@ UV_SHA256 = None  # verified at bootstrap when known; fetch .sha256 sidecar othe
 UV_EXE = os.path.join(BIN_DIR, 'uv.exe')
 UVX_EXE = os.path.join(BIN_DIR, 'uvx.exe')
 
-# CPython: the official python.org build (SAC-trusted on this host; uv's
-# standalone CPython has low-reputation DLLs that Windows Smart App Control
-# blocks - _ssl/_hashlib/_multiprocessing, WinError 4551). uv still manages
-# the venv; the interpreter is a silent per-user install under engine/pythons.
+# CPython: the official python.org build — SAC trusts its binaries (uv's
+# standalone CPython has low-reputation DLLs that Smart App Control blocks,
+# WinError 4551). Shipped via the embeddable zip (see _ensure_py_home); uv
+# still manages the venv on top of it under engine/pythons.
 PY_VERSION_FULL = '3.12.10'
-PY_INSTALLER_URL = ('https://www.python.org/ftp/python/'
-                    f'{PY_VERSION_FULL}/python-{PY_VERSION_FULL}-amd64.exe')
-PY_INSTALLER_SHA256 = ('67b5635e80ea51072b87941312d00ec8927c4db9ba18938f7ad2d'
-                       '27b328b95fb')
+# Embeddable distribution: pure zip extraction. The python.org *installer*
+# bundle is not deployable headlessly on hosts with Smart App Control
+# enforcing — its bootstrap engine has no cloud verdict and is blocked
+# (exit 66/67, ~empty log), which surfaces as 'python install failed'.
+PY_EMBED_URL = ('https://www.python.org/ftp/python/'
+                f'{PY_VERSION_FULL}/python-{PY_VERSION_FULL}-embed-amd64.zip')
+PY_EMBED_SHA256 = ('4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c'
+                   '8099a63025a3c3')
+PY_PTH_NAME = 'python' + ''.join(PY_VERSION_FULL.split('.')[:2]) + '._pth'
 PY_HOME = os.path.join(ENGINE_ROOT, 'pythons', 'cpy312')
 PY_HOME_EXE = os.path.join(PY_HOME, 'python.exe')
 
@@ -249,27 +254,40 @@ def python_exe():
 
 
 def _ensure_py_home(progress_cb=None):
-    """Official python.org 3.12 install under engine/pythons (SAC-trusted)."""
+    """CPython 3.12 embeddable distribution under engine/pythons.
+
+    The embeddable zip is pure file extraction — nothing executes during
+    deploy, so Smart App Control cannot block it the way it blocks the
+    python.org installer bundle's bootstrap engine."""
     if os.path.exists(PY_HOME_EXE):
         return PY_HOME_EXE
     os.makedirs(BIN_DIR, exist_ok=True)
-    inst = os.path.join(BIN_DIR, f'python-{PY_VERSION_FULL}-amd64.exe')
-    _download(PY_INSTALLER_URL, inst, progress_cb)
-    if _sha256_file(inst) != PY_INSTALLER_SHA256:
-        os.remove(inst)
-        raise RuntimeError('python installer sha256 mismatch')
+    zpath = os.path.join(BIN_DIR, f'python-{PY_VERSION_FULL}-embed.zip')
+    _download(PY_EMBED_URL, zpath, progress_cb)
+    if _sha256_file(zpath) != PY_EMBED_SHA256:
+        os.remove(zpath)
+        raise RuntimeError('python embed zip sha256 mismatch')
     if progress_cb:
-        progress_cb(10, f'installing CPython {PY_VERSION_FULL}')
-    _run([inst, '/quiet', 'InstallAllUsers=0', f'TargetDir={PY_HOME}',
-          'Include_launcher=0', 'InstallLauncherAllUsers=0',
-          'AssociateFiles=0', 'Shortcuts=0', 'PrependPath=0',
-          'Include_test=0'], progress_cb)
+        progress_cb(10, f'unpacking CPython {PY_VERSION_FULL}')
+    os.makedirs(PY_HOME, exist_ok=True)
+    with zipfile.ZipFile(zpath) as z:
+        z.extractall(PY_HOME)
     try:
-        os.remove(inst)
+        os.remove(zpath)
     except OSError:
         pass
     if not os.path.exists(PY_HOME_EXE):
         raise RuntimeError('python install failed')
+    # The embeddable package ships python312._pth with `import site`
+    # commented out; venv/pip need site enabled plus a real site-packages.
+    pth = os.path.join(PY_HOME, PY_PTH_NAME)
+    with open(pth, 'r', encoding='utf-8') as f:
+        content = f.read()
+    content = content.replace('#import site', 'import site')
+    if 'Lib/site-packages' not in content:
+        content = content.rstrip('\n') + '\nLib/site-packages\n'
+    with open(pth, 'w', encoding='utf-8') as f:
+        f.write(content)
     return PY_HOME_EXE
 
 
