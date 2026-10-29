@@ -74,7 +74,12 @@ def run(engine, weights_dir, input_path, output_path, options,
             cmd += ['--scale', str(int(options['scale']))]
 
         creationflags = 0x00000200 if os.name == 'nt' else 0  # CREATE_NEW_PROCESS_GROUP
+        # The wrapper logs emoji to stdout; without this the child's charmap
+        # codec raises UnicodeEncodeError on Windows.
+        env = dict(os.environ)
+        env['PYTHONIOENCODING'] = 'utf-8'
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                env=env,
                                 text=True, encoding='utf-8', errors='replace',
                                 creationflags=creationflags)
         with _ATFORK:
