@@ -9,6 +9,26 @@ dir), and ffmpeg/ffprobe sit next to the executable.
 import os
 import sys
 
+# Frozen sidecar: Tauri spawns us without a console, so sys.stdout/stderr
+# wrap invalid handles and every print(flush=True) raises
+# "[Errno 22] Invalid argument" — the download thread's except-clause then
+# reports that as the task error, clobbering the 'done' status set a line
+# earlier. Replace dead streams with devnull before anything logs.
+for _stream_name in ('stdout', 'stderr'):
+    _stream = getattr(sys, _stream_name, None)
+    if _stream is None:
+        setattr(sys, _stream_name, open(os.devnull, 'w', encoding='utf-8'))
+        continue
+    try:
+        _stream.flush()
+        os.fstat(_stream.fileno())
+    except (OSError, ValueError, AttributeError):
+        try:
+            setattr(sys, _stream_name,
+                    open(os.devnull, 'w', encoding='utf-8'))
+        except OSError:
+            pass
+
 BUNDLE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get('NEXTGENUP_DATA') or os.getcwd()
 
